@@ -29,22 +29,22 @@ class StatusCopyTest {
 
     @Test
     fun unavailableAccessibilityDistinguishesEnabledFromOff() {
-        assertEquals("Mika 的无障碍服务没有开启:请在系统设置的无障碍里打开 Mika。", StatusCopy.accessibilityUnavailable(enabled = false))
+        assertEquals("Mika のユーザー補助サービスがオフです。システム設定の「ユーザー補助」で Mika をオンにしてください。", StatusCopy.accessibilityUnavailable(enabled = false))
         val enabled = StatusCopy.accessibilityUnavailable(enabled = true)
-        assertTrue(enabled.contains("已开启"))
-        assertTrue(enabled.contains("关闭后重新开启"))
-        assertTrue(enabled.contains("允许受限制的设置"))
-        assertFalse(enabled.contains("没有开启"))
+        assertTrue(enabled.contains("有効ですが"))
+        assertTrue(enabled.contains("もう一度オン"))
+        assertTrue(enabled.contains("制限された設定を許可"))
+        assertFalse(enabled.contains("オフです"))
     }
 
     @Test
     fun restrictedAccessibilityPointsToAppInfoInsteadOfOnlyToggling() {
         val p = Problem.Accessibility(AccessibilityState.EnabledNotRunning, restrictedSettings = true)
-        assertTrue(StatusCopy.banner(p).detail.contains("允许受限制的设置"))
+        assertTrue(StatusCopy.banner(p).detail.contains("制限された設定を許可"))
         val e = StatusCopy.explain(p, "14")
         assertEquals(Fix.OpenAppInfo, e.fix)
-        assertTrue(e.body.contains("应用信息"))
-        assertTrue(e.body.contains("允许受限制的设置"))
+        assertTrue(e.body.contains("アプリ情報"))
+        assertTrue(e.body.contains("制限された設定を許可"))
     }
 
     @Test
@@ -54,11 +54,11 @@ class StatusCopyTest {
             userLocked = true,
             restrictedSettings = true,
         )
-        assertTrue(StatusCopy.banner(p).detail.contains("解锁一次"))
+        assertTrue(StatusCopy.banner(p).detail.contains("ロックを解除"))
         val e = StatusCopy.explain(p, "14")
         assertNull(e.fix)
         assertNull(e.action)
-        assertTrue(e.body.contains("解锁一次"))
+        assertTrue(e.body.contains("ロックを解除"))
     }
 
     @Test

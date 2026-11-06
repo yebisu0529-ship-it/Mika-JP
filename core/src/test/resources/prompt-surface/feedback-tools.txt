@@ -11,7 +11,7 @@
 ### invalid: required
 {"ok":false,"error":"invalid_arguments","message":"text: required","recoverable":true}
 ### invalid: located ref elsewhere
-{"ok":false,"error":"ref_expired","message":"ref_expired: 特定されてから状態が変わったか、この特定された参照が不明か期限切れ。再度その状態で特定する。","recoverable":true}
+{"ok":false,"error":"ref_expired","message":"ref_expired: 特定されてから状態が変わったか、この特定された参照が不明か期限切れ。再度その状態で特定する。","recoverable":true,"cause":"located_stale"}
 ### finish without evidence
 {"ok":false,"error":"unknown_tool","tool":"finish","message":"手段 'finish' はもうない。今それを行うには、ツールを呼び出さず、回答を通常の文章でユーザーへ返してください。何も行われなかった。","recoverable":true}
 ### pay via confirmation
@@ -93,7 +93,7 @@
 ### tap failed phone_unavailable
 {"ok":false,"error":"phone_unavailable","message":"Mika は今、スマートフォンのアプリを操作できない（Mika 内で一度だけ、ワイヤレスデバッグのペアリングで設定された Mika のスマートフォンヘルパーが動いていない、または Mika のアクセシビリティサービスがオフ）。ブラウザまたは実行環境の手段でできる場合はそちらで作業する。そうでない場合は end_not_done を呼び、何を直すべきかをユーザーに伝える。","recoverable":true,"moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
 ### tap failed ref_expired
-{"ok":false,"error":"ref_expired","message":"ref_expired: そのスナップショットから状態が変わっている。状態を再度読み、新しい ref と snapshotId を使う。","recoverable":true,"moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
+{"ok":false,"error":"ref_expired","message":"ref_expired: そのスナップショットから状態が変わっている。状態を再度読み、新しい ref と snapshotId を使う。","recoverable":true,"cause":"element_lost","moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
 ### tap failed keep_open_unavailable
 {"ok":false,"error":"keep_open_unavailable","message":"作業後にページを開いたままにすることはここでは利用できない。そのページは作業の終了時に閉じられる。ユーザーにその旨を伝える。","recoverable":true,"moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
 ### tap failed users_page
@@ -125,7 +125,7 @@
 ### double tap
 {"ok":false,"error":"double_tap_unsupported","message":"この状態ではダブルタップできない。1回タップするか、同じことをする別の方法を探す（多くのダブルタップ操作にはボタンやメニュー項目もある）。","recoverable":true}
 ### screenshotId as snapshotId
-{"ok":false,"error":"ref_expired","message":"ref_expired: 1 は screenshotId（view_past_screens 用の画像番号）であり、snapshotId ではない。要素一覧の snapshotId と ref を使う。直近の操作結果の screen フィールド、または状態を再度読む。","recoverable":true}
+{"ok":false,"error":"ref_expired","message":"ref_expired: 1 は screenshotId（view_past_screens 用の画像番号）であり、snapshotId ではない。要素一覧の snapshotId と ref を使う。直近の操作結果の screen フィールド、または状態を再度読む。","recoverable":true,"cause":"screenshot_id"}
 ### phone_diagnose blank
 {"ok":true,"currentApp":"com.x","state":"blank","usable":false,"needsHuman":false,"hint":"表示に読めるものがない。待ってもう一度確認する。空のままなら、1回戻る。それでも駄目なら hand_to_user を呼び出す。すでに開かれているアプリを再度起動しない。","moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
 ### phone_diagnose blank no window
@@ -134,6 +134,8 @@
 {"ok":true,"currentApp":"com.x","state":"loading","usable":false,"needsHuman":false,"hint":"表示はまだ変化中。少し待ってから、再度確認する。","moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
 ### phone_diagnose protected
 {"ok":true,"currentApp":"com.x","state":"protected","usable":false,"needsHuman":false,"hint":"このページはシステムにより保護されており、その画像を見ることができない。hand_to_user を呼び、ユーザーがスマートフォンで対応できるようにする。","moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
+### phone_diagnose capture unavailable
+{"ok":true,"currentApp":"com.x","state":"capture_unavailable","usable":false,"needsHuman":true,"takeoverReason":"display_capture","hint":"アプリのウィンドウはありますが、仮想画面から黒い画像しか得られていません。黒い画素だけでは、撮影制限と描画失敗を区別できません。黒い画像をモデルへ送信したり、その内容を説明したり、撮影を繰り返したりしないでください。読み取れたユーザー補助の要素で目的を果たせる場合は、それを使ってください。要素だけでは足りない場合は、reason を display_capture にして hand_to_user を呼び、端末上の操作をユーザーへ引き継いでください。","moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
 ### phone_diagnose needs human
 {"ok":true,"currentApp":"com.x","state":"needs_human","usable":false,"needsHuman":true,"takeoverReason":"login","hint":"この手順にはユーザーが必要（login）。reason login で hand_to_user を呼び出す。自分で入力しようとしない。","moreTools":"次の呼び出しからは、phone の手段一式（phone_observe, phone_list_elements, phone_tap, phone_scroll など）も、その説明と使い方とともに利用できる。"}
 ### phone_diagnose unsupported browser

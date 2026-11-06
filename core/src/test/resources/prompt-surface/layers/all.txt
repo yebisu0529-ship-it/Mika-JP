@@ -395,7 +395,7 @@ Android アプリでスクロールする。direction=down はさらに下の内
 {"type":"object","properties":{"command":{"type":"string","description":"Android shell command. MIKA_DISPLAY_ID is the current task's virtual display ID."},"reason":{"type":"string","description":"このツールを呼ぶ理由を日本語で短く書けます。ユーザーにステップの説明として表示されます。入力言語にかかわらず日本語で書いてください。"}},"required":["command"],"additionalProperties":false}
 
 ## phone_list_apps
-現在のユーザーにインストールされたアプリを、パッケージとラベルで列挙する。返された正確なパッケージを phone_launch_app で使う。別のユーザーやプロファイルにもインストールされたアプリ（複製アプリや仕事用プロファイルなど）については、複製ごとに1件追加され、同じパッケージ、複製を示すラベル、user を持つ。その user を phone_launch_app に渡すと、その複製が開く。
+現在のユーザーにインストールされたアプリを、パッケージとラベルで列挙する。返された正確なパッケージを phone_launch_app で使う。blocked と screenShareAllowed は true のときだけ含まれ、省略は false を表す。別のユーザーやプロファイルにもインストールされたアプリ（複製アプリや仕事用プロファイルなど）については、複製ごとに1件追加され、同じパッケージ、複製を示すラベル、user を持つ。その user を phone_launch_app に渡すと、その複製が開く。
 {"type":"object","properties":{"reason":{"type":"string","description":"このツールを呼ぶ理由を日本語で短く書けます。ユーザーにステップの説明として表示されます。入力言語にかかわらず日本語で書いてください。"}},"required":[],"additionalProperties":false}
 
 ## phone_launch_app

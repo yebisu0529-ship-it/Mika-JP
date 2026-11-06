@@ -233,7 +233,7 @@ phone_gesture #cface194d5c9
 phone_set_wheel #90e01f5a895f
 phone_run #b4fd6b242d76
 phone_system_command #4a34ea484644
-phone_list_apps #049a2e0dea10
+phone_list_apps #2056f9111c0b
 phone_launch_app #8ba68c7c60c1
 phone_app_after_task #4c126249189c
 phone_share_text #2ede9b53849d

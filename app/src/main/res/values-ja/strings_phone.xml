@@ -132,8 +132,8 @@
     <string name="phone_usb_copy">コピー</string>
     <string name="phone_usb_copied">コマンドをコピーしました</string>
     <string name="phone_usb_again_title">開始コマンドをもう一度実行</string>
-    <string name="phone_usb_again_body">スマホを USB ケーブルでパソコンにつないで、パソコンでこのコマンドを実行します(この adb コマンドをスマホに対して実行できる方法なら、ほかの方法でもかまいません)。スマホを再起動するたびに必要です。</string>
-    <string name="phone_success_note_usb">USB デバッグはオンのままにしてください。ヘルパーは USB コマンドで起動したため、スマホの再起動後は自動で復帰しません。Mika を開いて、もう一度コマンドを実行してください。</string>
+    <string name="phone_usb_again_body">多くの端末ではケーブルを抜いてもヘルパーは動き続けますが、停止する端末もあります。抜いた後にスマホの操作が止まった場合は、USB ケーブルで接続し、パソコンからこの開始コマンドをもう一度実行してください。スマホを再起動した後も必要です。</string>
+    <string name="phone_success_note_usb">USBデバッグはオンのままにしてください。多くの端末ではケーブルを抜いても動き続けますが、停止する端末もあります。抜いた後に操作が止まった場合や端末の再起動後は、USBで接続して開始コマンドをもう一度実行してください。</string>
     <string name="phone_usage_note_usb">Mika内蔵のヘルパーはUSBコマンドで起動したものです。多くの端末ではケーブルを抜いても動き続けますが、抜くと停止する端末もあります。「USBデバッグ」はオンのままにしてください。停止した場合や端末の再起動後は、USB接続して開始コマンドをもう一度実行してください。「スマホの操作を設定」でコピーできます。ワイヤレスデバッグが使える端末では、一度ペア設定すると再起動後も自動で再接続できます。</string>
     <string name="fail_root_denied">root の許可が拒否されました</string>
     <string name="fail_root_denied_body">root でスマホのヘルパーを起動できませんでした。「再試行」をタップして root 管理アプリで Mika を許可するか、「root でスマホのヘルパーを起動」をオフにしてください。</string>

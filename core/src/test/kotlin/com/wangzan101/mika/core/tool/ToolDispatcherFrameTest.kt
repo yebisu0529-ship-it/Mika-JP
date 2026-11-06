@@ -158,7 +158,7 @@ class ToolDispatcherFrameTest {
         val screenshot = d.execute(call("phone_screenshot")).content
         assertEquals(ScreenDiagnosis.DISPLAY_CAPTURE_UNAVAILABLE, screenshot.s("error"))
         assertEquals("false", screenshot.s("recoverable"))
-        assertTrue(screenshot.s("message").contains("cannot distinguish"))
+        assertTrue(screenshot.s("message").contains("撮影制限と描画失敗を区別できません"))
 
         val action = d.execute(call("phone_back"))
         assertTrue(action.images.isEmpty())
