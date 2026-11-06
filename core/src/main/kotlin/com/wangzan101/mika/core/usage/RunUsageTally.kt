@@ -36,7 +36,7 @@ class RunUsageTally : AbstractCoroutineContextElement(Key) {
         cached.addAndGet(usage.cachedInputTokens.toLong())
     }
 
-    /** 此刻的合计,作为运行记录里的一条 [RunEvent.ModelCalls]。 */
+    /** の合計が走行記録上1つの[RunEvent.ModelCalls]とみなされます。 */
     fun event(atMs: Long) = RunEvent.ModelCalls(
         atMs, logicalCalls.get(), unreported.get(), input.get(), output.get(), cached.get(), calls.get(), httpUnreported.get(),
     )

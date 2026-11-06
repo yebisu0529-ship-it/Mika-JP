@@ -761,6 +761,15 @@ class ProviderStoreTest {
         assertEquals(RoleChoices(main = null, vision = RoleChoice.SameAsMain, light = RoleChoice.SameAsMain), r.keepOnly(emptySet()))
     }
 
+    @Test fun sameConnectionWithDifferentReasoningEffortsStillAllowsLightRouting() {
+        val choices = RoleChoices(main = "a", light = RoleChoice.Model("a"),
+            reasoningEfforts = mapOf(ModelRole.Main to "high", ModelRole.Light to "low"))
+        assertFalse(choices.sameModel(ModelRole.Main, ModelRole.Light))
+        assertTrue(choices.copy(light = RoleChoice.SameAsMain).sameModel(ModelRole.Main, ModelRole.Light))
+        assertTrue(choices.copy(reasoningEfforts = mapOf(ModelRole.Main to "low", ModelRole.Light to "low"))
+            .sameModel(ModelRole.Main, ModelRole.Light))
+    }
+
     // ---------- モデルで指定されたインターフェイス ----------
 
     private val chat = ModelEndpoint(ModelProtocol.ChatCompletions, "https://x.test/openai/v1", "reasoning_content")

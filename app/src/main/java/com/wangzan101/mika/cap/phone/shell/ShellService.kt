@@ -220,7 +220,7 @@ class ShellService(
                 mode.physicalWidth, mode.physicalHeight, display.rotation, width, height,
                 requestedOrientations[taskId] ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
             ) ?: return@runCatching
-            // 快照之后这块屏可能已经放掉了
+            // この画面はスナップショット後に削除された可能性があります。
             if (!ownDisplay(id)) return@runCatching
             val ok = runCatching {
                 val wm = Class.forName("android.view.WindowManagerGlobal").getMethod("getWindowManagerService").invoke(null)!!

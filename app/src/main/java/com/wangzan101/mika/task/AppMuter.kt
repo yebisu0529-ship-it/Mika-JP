@@ -50,7 +50,7 @@ class AppMuter(
         val key = AppAudioKey.of(packageName, user)
         early -= key
         if (key in muted || key in unmuted || !wanted(packageName)) return
-        // 用户在主屏上正用着它:不静,照实说它可能出声
+        // ユーザーがホーム画面で使用しています: 無音ではありません、正直に言うと音が出るかもしれません
         if (onMainScreen(packageName, user) || !audio.mute(key)) {
             failed(packageName)
             return

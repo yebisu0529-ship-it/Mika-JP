@@ -202,7 +202,7 @@ internal class ScreenSession(
         // 受保护或持续全黑的帧都不给视觉模型;后者仍保留可读控件供降级操作。
         val png = if ((sendImage && textOnlyDepth == 0 || (recordFrames && recordFrame && textOnlyDepth == 0)) &&
             !s.protected && s.captureError == null) screen.screenshotPng() else null
-        // 只有主模型能看图才留图；付款页和普通页面按同一规则处理
+        // メインモデルのみが画像を表示できます。決済ページと通常ページは同じルールに従って処理されます。
         val kept = png?.takeIf { visionEnabled }
         shots.remember(Recall(shotId, shots.step, s.packageName, kept, observationText(s, ocr.orEmpty())))
         val image = png.takeIf { sendImage }
@@ -247,7 +247,7 @@ internal class ScreenSession(
         val s = lastSnapshot ?: return null
         val shotId = (obs.content["screenshotId"] as? JsonPrimitive)?.content?.toIntOrNull() ?: return null
         val png = if (s.protected || s.captureError != null) null else screenAttempt { obs.frame ?: if (screen.isProtected()) null else screen.screenshotPng() }
-        // 回看里这一张补上画面
+        // レビューの補足画像です
         val recalls = shots.recalls
         if (png != null) recalls.indexOfLast { it.id == shotId }.takeIf { it >= 0 }?.let { i ->
             val r = recalls[i]; recalls[i] = Recall(r.id, r.step, r.app, png, r.elementsText)

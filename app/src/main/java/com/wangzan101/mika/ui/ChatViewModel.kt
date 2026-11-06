@@ -989,7 +989,7 @@ class ChatViewModel(
         actions.unmuteIn(id)
     }
 
-    /** 切到某个对话;任务在跑时不切。 */
+    /** は特定の会話をカットします。タスクは実行中にカットされません。 */
     fun openConversation(id: String) {
         refreshParallel()
         if (parallel()) return switchTo(id)

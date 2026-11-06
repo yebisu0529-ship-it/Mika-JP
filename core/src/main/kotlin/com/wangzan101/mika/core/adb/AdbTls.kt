@@ -46,7 +46,7 @@ class AdbTls(
         return wrap(plain, target, client = true)
     }
 
-    /** 在已有连接上做 TLS 握手;[client] = false 只给测试里的假服务端用。 */
+    /** は既存の接続で TLS ハンドシェイクを実行します。 [client] = false は、テストの偽サーバーにのみ使用されます。 */
     fun wrap(plain: Socket, target: InetSocketAddress, client: Boolean): SSLSocket {
         val host = target.address?.hostAddress ?: throw IllegalArgumentException("ADB address must be resolved")
         val s = context.socketFactory.createSocket(plain, host, target.port, true) as SSLSocket

@@ -1373,5 +1373,5 @@ internal data class CapsuleWindowVisibility(val capsule: Boolean, val card: Bool
 internal fun capsuleWindowVisibility(expanded: Boolean, cardOut: Boolean, closing: Boolean): CapsuleWindowVisibility =
     CapsuleWindowVisibility(capsule = !expanded || !cardOut || closing, card = expanded)
 
-/** 胶囊上临时闪的一句:[kind] 定前面的标记(办好了是勾、没办成是叹号);[opensMika] 时点它打开 Mika;[id] 每句不同(胶囊按它重新定宽)。 */
+/** カプセル上で文が一時的に点滅します。 [kind] は設定の前のマークです (設定が完了している場合はチェック マーク、未完了の場合は感嘆符です)。 [opensMika] クリックしてミカを開きます。 [id] 各文は異なります (クリックするとカプセルの幅がリセットされます)。 */
 private data class CapsuleNote(val text: String, val kind: CapsuleKind, val opensMika: Boolean, val id: Int)

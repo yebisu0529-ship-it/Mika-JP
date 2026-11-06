@@ -130,7 +130,7 @@ class AgentDisplay(
     /** 最近一次收到帧的时刻;还没收到过为 null。 */
     fun lastFrameAt(): Long? = frameArrivedAt.takeIf { it > 0 }
 
-    /** OCR 使用原始尺寸的画面副本，避免 PNG 编码和解码；调用方负责 recycle。 */
+    /** OCR は、フレームの元のサイズのコピーを使用し、PNG エンコードとデコードを回避します。呼び出し元にはリサイクルの責任があります。 */
     fun latestFrameBitmap(): Bitmap? = synchronized(frameLock) {
         val bmp = fullFrame
         if (!hasFrame || bmp == null) null else uprightDisplayFrame(bmp, frameGeometry, paint = paint)

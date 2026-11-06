@@ -46,7 +46,7 @@ internal class Diagnose(f: ScreenFamily) : ScreenTool(f, "diagnose") {
                     ScreenState.LOADING -> put("hint", Feedback["screen.loading"])
                     ScreenState.PROTECTED -> put("hint", HINT_PROTECTED)
                     ScreenState.CAPTURE_UNAVAILABLE -> put("hint", HINT_DISPLAY_CAPTURE)
-                    // 被限制访问:除了交给用户,还要别马上重试
+                    // にはアクセスが制限されています。ユーザーに引き渡すだけでなく、すぐに再試行しないでください。
                     ScreenState.NEEDS_HUMAN -> put("hint", if (c.takeoverReason == "access_blocked") Feedback["barrier.access_blocked"]
                         else Feedback.format("screen.needs_human", "reason" to c.takeoverReason))
                 }

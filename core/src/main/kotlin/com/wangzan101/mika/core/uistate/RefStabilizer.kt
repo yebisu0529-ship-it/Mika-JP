@@ -106,12 +106,12 @@ class RefStabilizer(private val prefix: String = "s") {
         if (n < 1 || n > count) return Resolved.Stale(StaleCause.SnapshotUnknown)
         // 太旧的一屏连当时有哪些编号都没留着:先报 snapshot_unknown,不能把未知/退役编号误报成 ref_retired。
         if (n != count && n !in centers) return Resolved.Stale(StaleCause.SnapshotUnknown)
-        // 编号得真是那一屏里的,模型拼错的组合不放过
+        // には画面に表示されているとおりに番号が付けられており、スペルを間違えたモデルの組み合わせを見逃すことはありません。
         val from = born[ref] ?: return Resolved.Stale(StaleCause.RefRetired)
         if (from > n) return Resolved.Stale(StaleCause.RefNotInSnapshot)
         val portRef = cur.toPort[ref] ?: return Resolved.Stale(StaleCause.RefRetired)
         if (n != count) {
-            // 每屏之间都没挪远,累计起来也可能挪远了:从模型看到的那一屏算起
+            // 各画面は遠くに移動したわけではなく、モデルが見た画面から開始して累積的に遠くに移動した可能性があります。
             val then = centers[n]?.get(ref) ?: return Resolved.Stale(StaleCause.SnapshotUnknown)
             val now = centers[count]?.get(ref) ?: return Resolved.Stale(StaleCause.SnapshotUnknown)
             val limit = min(cur.port.width, cur.port.height) * STABLE_REF_MAX_SHIFT

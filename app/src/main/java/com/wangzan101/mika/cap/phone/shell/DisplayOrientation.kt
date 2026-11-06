@@ -2,7 +2,7 @@ package com.wangzan101.mika.cap.phone.shell
 
 import android.content.pm.ActivityInfo
 
-/** 后台屏不抢主屏焦点时,系统可能把横屏 Activity 缩在竖屏顶部。按系统报告的应用窗口比例纠正屏方向。 */
+/** 背景画面がメイン画面のフォーカスを奪わない場合、システムは水平画面のアクティビティを垂直画面の上部に縮小することがあります。システムによって報告されたアプリケーション ウィンドウの比率に従って、画面の向きを修正します。 */
 internal object DisplayOrientation {
     fun rotation(
         bufferWidth: Int,

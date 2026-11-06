@@ -834,7 +834,7 @@ class AndroidScreen(
             val now = foregroundTaskPackage() ?: ScreenReader.topPackage(windows())
             if (now == before && treeHash() == beforeTree) frameGuardSince = null
         }
-        // 打开了:Mika 屏上最上面的任务是它(问不到任务时退回看无障碍读到的最上面的窗口);指定了哪一份时还得是那份用户的任务
+        // が開きました: ミカ 画面の一番上のタスクはこれです (タスクを要求できない場合は、一番上のウィンドウに戻って読みやすいようにしてください)。どちらを指定するかはユーザーのタスクである必要があります
         fun launched(): Boolean = (foregroundTaskPackage()?.let { it == packageName } ?: (ScreenReader.topPackage(windows()) == packageName)) &&
             (user == null || userOf(runCatching { shell.topTaskId(displayId) }.getOrDefault(-1)).let { it < 0 || it == user })
         fun picker(): String? = if (sharing) systemPickerOf(packageName, before) else null
@@ -849,7 +849,7 @@ class AndroidScreen(
             // は別のコピーを必要としていますが、システムは最初にどれを開くかを尋ねます。オプションを 1 つずつクリックして、モデルの推測に任せることなく、どのコピーが開かれているかを識別します。
             if (chooserTargets(packageName, before) != null) return resolveCopyChooser(packageName, user, before, hint)
                 .also { if (it is ActionResult.Failed) clearGuardIfUnchanged() }
-            // 直接开出来的是这个 App 的别的那份:照实失败,不当成要的那份
+            // 直接開かれているのは、このアプリの別のコピーです。このままでは失敗し、目的のコピーではありません。
             if (foregroundTaskPackage() == packageName) return copyNotOpened(user, userOf(runCatching { shell.topTaskId(displayId) }.getOrDefault(-1)))
                 .also { clearGuardIfUnchanged() }
         }
@@ -878,7 +878,7 @@ class AndroidScreen(
         // 树稳定只是窗口到了顶,画面可能还没合成:等这次启动之后的第一帧;等不到就持续拦住旧帧,
         // 不把上一屏留在缓冲里的残影当这次打开的画面交给模型(issue #253)
         if (launchedAt > 0) awaitFrameAfter(launchedAt)
-        // 打开了,但另一个包的窗口盖在上面(权限弹窗、账号选择器):照实说是谁,仍算打开了
+        // は開いていますが、別のパッケージのウィンドウがそれを覆っています (許可ポップアップ ウィンドウ、アカウント セレクター)。正直に言って、それが誰であるかを教えてください。まだ開いています。
         val cover = ScreenReader.topPackage(windows())?.takeIf { it != packageName }
         return ok(hint = hint).let { if (cover != null) it.copy(coveredBy = cover, appSwitched = null, switchedByTarget = false) else it }
     }
@@ -959,7 +959,7 @@ class AndroidScreen(
         val before = ScreenReader.topPackage(windows())
         val beforeTree = treeHash()
         val startedAt = SystemClock.uptimeMillis()
-        // 事先知道由谁打开的(指定了 App、设置页、只有一个 App 接的链接):启动前先静上
+        // は、誰が開いたかを事前に知っています (アプリ、設定ページ、およびアプリへのリンクが 1 つだけ指定されています): 開始する前に終了します。
         val early = expected ?: linkHandler(action, uri)
         early?.let { beforeOpen(it, null) }
         val code = shell.startView(id, action, uri, pinned)
@@ -984,7 +984,7 @@ class AndroidScreen(
         val top = ScreenReader.topPackage(windows())
         val changed = top != before || treeHash() != beforeTree
         if (changed) awaitFrameAfter(startedAt) else frameGuardSince = null
-        // 只认真正打开链接的 App:落在系统选择器或别处时不把它当成目标
+        // リンクされたアプリのみを開きます。システム セレクターまたはその他の場所にある場合は、ターゲットとして扱いません。
         val opened = top?.takeIf { if (expected != null) it == expected else it !in systemPickers }
         if (opened != null) {
             // 誰がリンクを開いたのかが事前にわからない場合は、着陸後にそのリンクを占有することになります。占領できない場合は撤退しません（シェルの他の画面を確認しました）
@@ -1283,7 +1283,7 @@ class AndroidScreen(
     /** 不算开到主屏上的:Mika 自己、桌面 App。 */
     private val notSpills: Set<String> by lazy { homeApps + a11y.packageName }
 
-    /** 动作之前:请内置助手盯着主屏,记下此刻两块屏最上面的任务;没有屏、接管中或助手不支持时为 null(不盯)。 */
+    /** アクションを起こす前に: 内蔵アシスタントを使用してホーム画面を見つめ、現時点で 2 つの画面の上部にあるタスクを書き留めてください。画面がない場合、画面が引き継がれている場合、またはアシスタントがサポートしていない場合は、null (見つめられていない) になります。 */
     private fun armSpillWatch(): Watch? {
         if (!hasDisplay || handedOver()) return null
         val since = SystemClock.uptimeMillis()

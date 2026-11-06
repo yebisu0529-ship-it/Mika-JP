@@ -10,7 +10,7 @@ enum class ScreenState(val wire: String) {
     PROTECTED("protected"),
     /** 画面持续不可用;黑像素本身不能证明是防截屏还是虚拟屏没有合成出内容。 */
     CAPTURE_UNAVAILABLE("capture_unavailable"),
-    /** 登录、验证码、支付等需要用户亲自处理的页面。 */
+    /** ログイン、確認コード、支払い、およびユーザーが個人的に処理する必要があるその他のページ。 */
     NEEDS_HUMAN("needs_human"),
 }
 
@@ -49,7 +49,7 @@ object ScreenDiagnosis {
     const val UNREADABLE_WINDOW = "unreadable window"
     const val DISPLAY_CAPTURE_UNAVAILABLE = "display_capture_unavailable"
     const val DISPLAY_CAPTURE = "display_capture"
-    /** 网页:网站不支持内置浏览器(要求换浏览器或下载 App)。 */
+    /** Web ページ: この Web サイトは内蔵ブラウザをサポートしていません (ブラウザを変更するか、アプリをダウンロードする必要があります)。 */
     const val UNSUPPORTED_BROWSER = "unsupported_browser"
 
     private val CAPTCHA = listOf(

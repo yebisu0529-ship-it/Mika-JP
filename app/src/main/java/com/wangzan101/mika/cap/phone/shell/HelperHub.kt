@@ -42,7 +42,7 @@ class HelperHub(context: Context) {
     @Volatile var lastHandoffRejection: String? = null
         private set
 
-    /** 经助手代连本进程的 WebView 调试套接字;助手不在时抛 IOException,助手拒绝或连不上为 null。 */
+    /** は、アシスタントを通じてこのプロセスの WebView デバッグ ソケットに接続します。アシスタントが利用できない場合は IOException がスローされ、アシスタントが拒否するか接続できない場合は null がスローされます。 */
     fun openDevtoolsSocket(endpoint: String): ParcelFileDescriptor? {
         val sh = shell.value ?: throw IOException("phone helper is not running")
         return sh.openDevtoolsSocket(endpoint)

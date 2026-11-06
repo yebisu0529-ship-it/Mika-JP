@@ -282,7 +282,7 @@ class TaskRun(
         internal set
     /** 已接上的手机侧;浮层恢复声音据此找到当前目标 App,收尾时清空。 */
     @Volatile private var phone: PhoneSide? = null
-    /** 发布与收尾互斥;[ended] 之后不再写状态,迟到的发布不能盖掉终态或重新拿锁。 */
+    /** のリリースとクローズは相互に排他的です。 [ended] の後に状態は書き込まれず、後期リリースでは最終状態を上書きしたり、ロックを再取得したりすることはできません。 */
     private val publishLock = Any()
     private var ended = false
 
@@ -328,7 +328,7 @@ class TaskRun(
         }
     }
 
-    /** 回答提问;已经不在等(超时后才答、已答过)时调 [tooLate] 告诉用户这条回答没用上。 */
+    /** が質問に答えます。待機状態がなくなったとき (タイムアウト後の応答が応答されたとき)、[tooLate] が呼び出され、この応答が役に立たないことをユーザーに伝えます。 */
     fun answer(text: String, tooLate: () -> Unit) {
         if (loop == null) return
         if (_state.value is TaskState.WaitingInput) scope.launch {
@@ -477,7 +477,7 @@ class TaskRun(
         // 携帯電話側 (内蔵アシスタント、アクセシビリティ、仮想画面) は、app の初回起動時にのみ接続されます: Web ページとサンドボックスのみを使用するタスクにはそれらは必要ありません
         var connection: com.wangzan101.mika.cap.phone.shell.ShellBinding? = null
         phone = null
-        // 虚拟屏、网页显示等:建好当场归它,收尾时一起放掉;不经「建完再记到变量」,取消落在中间也不会漏
+        // 仮想画面、Webページ表示等：構築後その場で返却、終了時に一緒にリリース; 「ビルド後に変数を記録する」必要がなく、途中で落としてもキャンセルを取り逃がしません。
         val resources = ResourceScope()
         var watcher: DeviceStateWatcher? = null
         var mute: AudioMute? = null
@@ -1014,7 +1014,7 @@ class TaskRun(
                 }
             }
             phone = null
-            // 屏释放后、对外报结束前清掉:界面看到任务结束时已经没有屏了
+            // 画面が解放された後、外部レポートが終了する前に画面がクリアされます。インターフェイスでは、タスクの終了時に画面が存在しないことが認識されます。
             _displayId.value = -1
             _appShown.value = false
             if (connection != null) phoneServices.sharedShell.release()

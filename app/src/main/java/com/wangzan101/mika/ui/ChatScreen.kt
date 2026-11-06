@@ -392,7 +392,7 @@ fun ChatScreen(
             },
             onReopen = vm::reopenPip,
             onUnmute = vm::unmutePip,
-            // 要你处理时点小窗:收起,滚到要你处理的那张卡片(在最后一问一答里,它后面只可能还有文件卡片和去设置那一行)
+            // が処理したい場合は、小さなウィンドウをクリックして、それを片付け、処理したいカードまでスクロールします（最後の質問と回答では、ファイルカードとその後に設定する行しかない場合があります）
             onAttention = {
                 vm.attendPip()
                 val count = listState.layoutInfo.totalItemsCount

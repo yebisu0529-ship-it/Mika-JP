@@ -148,7 +148,7 @@ object StatusCopy {
         }
         is Problem.Accessibility -> when (p.state) {
             AccessibilityState.Off -> BannerCopy(tr(R.string.banner_a11y_off), tr(R.string.banner_a11y_off_detail), tr(R.string.turn_on_go))
-            // 开机后还没解锁过时服务本来就绑不上:解锁后会自己恢复,不让用户去关掉再打开
+            // 古いサービスは、起動後にロック解除されるまでバインドできません。ロック解除後に自動的に復元され、ユーザーはサービスをオフにして再度オンにすることはできません。
             AccessibilityState.EnabledNotRunning -> when {
                 p.userLocked -> BannerCopy(tr(R.string.banner_a11y_locked), tr(R.string.banner_a11y_locked_detail), tr(R.string.view))
                 p.restrictedSettings -> BannerCopy(

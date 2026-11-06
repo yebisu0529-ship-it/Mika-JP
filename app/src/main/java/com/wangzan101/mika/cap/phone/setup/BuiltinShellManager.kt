@@ -87,7 +87,7 @@ class BuiltinShellManager(context: Context, private val hub: HelperHub, private 
     @Volatile var lastHelperLaunchStage: String? = null
         private set
 
-    /** 要起助手时替用户打开无线调试:只由 App 自己写系统设置(要起助手时没有别的连接可用)。 */
+    /** アシスタントを開始するときにユーザーのワイヤレス デバッグをオンにします。アプリ自体のみがシステム設定を書き込みます (アシスタントを開始するときに他の接続は使用できません)。 */
     val wirelessAutoOn: WirelessDebuggingAutoOn by lazy {
         WirelessDebuggingAutoOn(
             wants = { consent().wants(RecoveryCapability.AutoWirelessDebugging) },
@@ -252,7 +252,7 @@ class BuiltinShellManager(context: Context, private val hub: HelperHub, private 
             launchStage("adb_connecting")
             val connection = connect(tls)
             launchStage("adb_connected")
-            // 流开着 sh 就一直等;交接到了(或超时)再关,交接结果仍由引擎从 HelperHub 判断
+            // sh ストリームが開いている場合は待機します。ハンドオーバーされる (またはタイムアウトになる) と、再びオフになります。ハンドオーバー結果は引き続き HelperHub からのエンジンによって判断されます。
             val before = hub.shell.value
             connection.use {
                 val stream = it.exec(command)

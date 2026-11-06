@@ -29,7 +29,7 @@ interface TakeoverPort {
     fun setSound(packageName: String, on: Boolean)
     /** 用户明确恢复声音;实现要连同本次任务的自动静音规则一起更新。 */
     fun unmute(packageName: String) = setSound(packageName, true)
-    /** 开始数用户在主屏上对该包的操作;App 交到用户手上时调用。 */
+    /** は、ホーム画面上のパッケージに対するユーザーの操作のカウントを開始します。アプリがユーザーに引き渡されるときに呼び出されます。 */
     fun watchInput(packageName: String)
     /** 現時点でカウントされている操作とページ。カウントしない場合は null。 */
     suspend fun handoverActivity(): HandoverActivity?
