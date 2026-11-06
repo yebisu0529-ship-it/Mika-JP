@@ -522,6 +522,10 @@ class TaskRun(
 
             /** 携帯電話に接続します: 内蔵アシスタントに接続し、アクセシビリティを待ち、仮想画面を準備します (最初の launch_app までに構築されます)。何かが不足している場合は、phone_unavailable が報告されます。 */
             suspend fun connectPhone(): AndroidScreen {
+                if (phoneServices.recoverySettings.paymentPause.value != null) {
+                    publish(TaskState.Held(GateReason("payment_paused", tr(R.string.payment_paused_body))))
+                    phoneServices.recoverySettings.paymentPause.first { it == null }
+                }
                 // バージョンでは携帯電話の操作のみが必要です。古いシステムでもチャットしたり、Web ページやサンドボックスを使用したりできますが、サポートされていないアシスタントとペアリングするように指示されるべきではありません。
                 if (Build.VERSION.SDK_INT < Prerequisites.MIN_SDK) throw PhoneUnavailable(TaskService.TOO_OLD)
                 val conn = connection ?: phoneServices.sharedShell.acquire().also { connection = it }
@@ -621,7 +625,7 @@ class TaskRun(
                 val id = phone?.display?.current?.displayId ?: return false
                 return moveTask(taskId, id)
             }
-            val taskGate = TaskGate(states.locked, shellUp) {
+            val taskGate = TaskGate(states.locked, shellUp, phoneServices.recoverySettings.paymentPause) {
                 val t = phone?.screen?.target?.value
                 t != null && t.taskId >= 0 && moveBackToAgent(t.taskId)
             }

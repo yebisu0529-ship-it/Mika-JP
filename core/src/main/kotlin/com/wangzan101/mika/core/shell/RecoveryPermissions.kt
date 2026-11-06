@@ -38,9 +38,11 @@ enum class RecoveryCapability {
 data class RecoveryConsent(
     val applied: Set<RecoveryCapability> = emptySet(),
     val declined: Set<RecoveryCapability> = emptySet(),
+    /** 一時停止中の機能。元のユーザー設定とは分けて保持する。 */
+    val suspended: Set<RecoveryCapability> = emptySet(),
 ) {
     /** ユーザーはこの項目を望んでいません。自分でオフにする必要はありません (スイッチに表示されているものです)。 */
-    fun wants(c: RecoveryCapability): Boolean = c !in declined
+    fun wants(c: RecoveryCapability): Boolean = c !in declined && c !in suspended
 
     fun isApplied(c: RecoveryCapability): Boolean = c in applied
 
@@ -141,6 +143,7 @@ class RecoveryPermissions(
     /** ユーザーがスイッチをダイヤルします。スイッチをオンにし、確認せずに直接実行します。電源を切ってすぐに元に戻し、「ユーザーが電源を切ったこと」を書き留めてください。 */
     suspend fun set(capability: RecoveryCapability, on: Boolean): PermissionResult = lock.withLock {
         val now = store.consent.value
+        if (on && capability in now.suspended) return@withLock PermissionResult.Failed("Capability is temporarily suspended")
         val shell = runner()
         if (shell == null) {
             return@withLock when {
@@ -167,6 +170,7 @@ class RecoveryPermissions(
         val shell = runner() ?: return@withLock PermissionResult.NoRunner
         var failure: PermissionResult? = null
         for (c in store.consent.value.pending) {
+            if (!store.consent.value.wants(c)) continue
             val r = run(shell, listOf(c), on = true)
             if (r == PermissionResult.Done) store.save(store.consent.value.withApplied(c, true))
             else if (failure == null) failure = r
@@ -201,6 +205,7 @@ class RecoveryPermissions(
      * は、サービスが閉じられた状態のままにならないように、途中でキャンセルされた場合でも、削除後に必ず追加されます。追加が失敗すると、元のリストに書き戻され、引き続き失敗が報告されます。変更なし [RecoveryConsent]: これはオープンまたはリトラクトの能力ではありません。
      */
     suspend fun restartAccessibility(gapMs: Long): PermissionResult = lock.withLock {
+        if (RecoveryCapability.Accessibility in store.consent.value.suspended) return@withLock PermissionResult.Done
         val shell = runner() ?: return@withLock PermissionResult.NoRunner
         val me = PermissionCommands.accessibilityService(packageName)
         try {
@@ -211,6 +216,7 @@ class RecoveryPermissions(
             if (removed != PermissionResult.Done) return@withLock removed
             withContext(NonCancellable) {
                 delay(gapMs)
+                if (RecoveryCapability.Accessibility in store.consent.value.suspended) return@withContext PermissionResult.Done
                 val now = shell.exec(PermissionCommands.READ_ACCESSIBILITY)
                 val back = runAll(shell, PermissionCommands.writeAccessibility(AccessibilityList.with(now, me)))
                 // 追加が失敗した場合は、元のリスト (メイン スイッチとともに) を書き戻します。Mika をリストから消すよりは、「存在するがバインドされていない」状態に戻ります。
@@ -224,6 +230,16 @@ class RecoveryPermissions(
         } catch (e: Exception) {
             PermissionResult.Failed(e.message ?: e.javaClass.simpleName)
         }
+    }
+
+    /** 支払いの停止・明示的な再開専用。自動復旧の元の設定は変更しない。 */
+    suspend fun setAccessibilityForPayment(on: Boolean): PermissionResult = lock.withLock {
+        val shell = runner() ?: return@withLock PermissionResult.NoRunner
+        val result = run(shell, listOf(RecoveryCapability.Accessibility), on)
+        if (result == PermissionResult.Done) {
+            store.save(store.consent.value.withApplied(RecoveryCapability.Accessibility, on))
+        }
+        result
     }
 
     /** 各項目は独立して実行され、1 つの項目が失敗しても後続の項目はブロックされません。最初の失敗が返されます。 */

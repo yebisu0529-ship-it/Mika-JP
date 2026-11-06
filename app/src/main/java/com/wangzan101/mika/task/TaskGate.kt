@@ -4,6 +4,7 @@ import com.wangzan101.mika.R
 import com.wangzan101.mika.i18n.tr
 import com.wangzan101.mika.core.agent.GateReason
 import com.wangzan101.mika.core.agent.TaskState
+import com.wangzan101.mika.core.shell.PaymentPauseRecord
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.update
 class TaskGate(
     private val locked: StateFlow<Boolean>,
     private val shellAvailable: StateFlow<Boolean>,
+    private val paymentPause: StateFlow<PaymentPauseRecord?> = MutableStateFlow(null),
     private val moveBack: suspend () -> Boolean,
 ) {
     private val movedAway = MutableStateFlow(false)
@@ -57,6 +59,10 @@ class TaskGate(
         while (true) {
             val onPhone = phone()
             when {
+                paymentPause.value != null -> {
+                    setWaiting(TaskState.Held(GateReason("payment_paused", tr(R.string.payment_paused_body))))
+                    paymentPause.first { it == null }
+                }
                 userOnPage.value -> {
                     setWaiting(TaskState.Held(paused(USER_ON_PAGE)))
                     userOnPage.first { !it }

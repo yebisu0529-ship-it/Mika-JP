@@ -182,7 +182,7 @@ fun RecoverySection(
             val on = consent.wants(cap)
             val icon = iconOf(cap)
             ListRow(icon, copy.title, if (busy == cap) RecoveryCopy.WORKING else copy.subtitle, first = i == 0) {
-                MikaSwitch(on, { want -> onToggle(cap, want) }, Modifier.testTag("recovery-${cap.name}"), enabled = busy == null)
+                MikaSwitch(on, { want -> onToggle(cap, want) }, Modifier.testTag("recovery-${cap.name}"), enabled = busy == null && cap !in consent.suspended)
             }
             Note(copy.explain, MikaTheme.colors.ink3)
             notes[cap]?.let { Note(it, MikaTheme.colors.bad) }

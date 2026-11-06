@@ -3,6 +3,7 @@ package com.wangzan101.mika.task
 import org.junit.Rule
 import com.wangzan101.mika.i18n.ChineseTexts
 import com.wangzan101.mika.core.agent.TaskState
+import com.wangzan101.mika.core.shell.PaymentPauseRecord
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.cancelChildren
@@ -24,6 +25,24 @@ class TaskGateTest {
     private var moveBackResult = true
     private val gate = TaskGate(locked, shellUp) { moveBackCalls++; moveBackResult }
     private val reported = mutableListOf<TaskState?>()
+
+    @Test fun paymentPauseCannotBeBypassedByTaskContinueOrScreenUnlock() = runTest {
+        val paused = MutableStateFlow<PaymentPauseRecord?>(PaymentPauseRecord(true))
+        val paymentGate = TaskGate(locked, shellUp, paused) { true }
+        var passed = false
+        launch { paymentGate.pass { reported += it }; passed = true }
+        runCurrent()
+        assertFalse(passed)
+        assertEquals("payment_paused", (reported.last() as TaskState.Held).reason.code)
+        paymentGate.resume()
+        locked.value = true
+        locked.value = false
+        runCurrent()
+        assertFalse(passed)
+        paused.value = null
+        runCurrent()
+        assertTrue(passed)
+    }
 
     @Test
     fun passesImmediatelyWhenNothingBlocks() = runTest {

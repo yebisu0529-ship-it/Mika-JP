@@ -8,6 +8,8 @@ import com.wangzan101.mika.core.shell.RecoveryCapability
 import com.wangzan101.mika.core.shell.RecoveryConsent
 import com.wangzan101.mika.core.shell.RecoveryConsentStore
 import com.wangzan101.mika.core.shell.RestoreOutcome
+import com.wangzan101.mika.core.shell.PaymentPauseRecord
+import com.wangzan101.mika.core.shell.PaymentPauseStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,9 +21,23 @@ import kotlinx.coroutines.flow.asStateFlow
  * `<キー>_declined` 「ユーザーが個人的にオフにした」ことを思い出してください。古いバージョンには前のキーしかありません。false のキーは、それが触れられていないのか、オフになっているのかわかりません。
  * は常にタッチされていないものとして扱われます。新しいキーが存在しない場合はオフになっていないため、アップグレード時に追加の移行を実行する必要はありません。これらの項目は、接続が利用可能な場合、デフォルトで開きます。
  */
-class RecoverySettings(private val prefs: SharedPreferences) : RecoveryConsentStore {
+class RecoverySettings(private val prefs: SharedPreferences) : RecoveryConsentStore, PaymentPauseStore {
     private val _consent = MutableStateFlow(read())
     override val consent: StateFlow<RecoveryConsent> = _consent.asStateFlow()
+
+    private val _paymentPause = MutableStateFlow(readPaymentPause())
+    override val paymentPause: StateFlow<PaymentPauseRecord?> = _paymentPause.asStateFlow()
+
+    @Synchronized override fun savePaymentPause(record: PaymentPauseRecord?) {
+        check(prefs.edit().putBoolean(PAYMENT_PAUSED, record != null)
+            .putBoolean(PAYMENT_RESTORE_A11Y, record?.restoreAccessibility == true).commit())
+        // 自動復旧を先に抑止してから、画面操作や通知へ停止を通知する。
+        _consent.value = read()
+        _paymentPause.value = record
+    }
+
+    private fun readPaymentPause() = if (prefs.getBoolean(PAYMENT_PAUSED, false))
+        PaymentPauseRecord(prefs.getBoolean(PAYMENT_RESTORE_A11Y, false)) else null
 
     private val _lastRestore = MutableStateFlow(readOutcome())
     val lastRestore: StateFlow<RestoreOutcome?> = _lastRestore.asStateFlow()
@@ -51,11 +67,11 @@ class RecoverySettings(private val prefs: SharedPreferences) : RecoveryConsentSt
         prefs.edit().apply {
             for ((c, key) in KEYS) {
                 putBoolean(key, consent.isApplied(c))
-                putBoolean(key + DECLINED, !consent.wants(c))
+                putBoolean(key + DECLINED, c in consent.declined)
             }
             if (restoreChanged) remove(LAST_RESTORE)
         }.commit()
-        _consent.value = consent
+        _consent.value = read()
         // 再起動またはシャットダウン後、古い起動結果は問題を示さなくなりました。
         if (restoreChanged) _lastRestore.value = null
     }
@@ -68,6 +84,7 @@ class RecoverySettings(private val prefs: SharedPreferences) : RecoveryConsentSt
     private fun read() = RecoveryConsent(
         applied = KEYS.filter { (_, key) -> prefs.getBoolean(key, false) }.keys,
         declined = KEYS.filter { (_, key) -> prefs.getBoolean(key + DECLINED, false) }.keys,
+        suspended = if (prefs.getBoolean(PAYMENT_PAUSED, false)) setOf(RecoveryCapability.Accessibility) else emptySet(),
     )
 
     private fun readOutcome(): RestoreOutcome? =
@@ -86,6 +103,8 @@ class RecoverySettings(private val prefs: SharedPreferences) : RecoveryConsentSt
         private const val A11Y_SEEN = "a11y_seen"
         private const val A11Y_LOSS = "a11y_loss"
         private const val A11Y_LOSS_AT = "a11y_loss_at"
+        private const val PAYMENT_PAUSED = "payment_paused"
+        private const val PAYMENT_RESTORE_A11Y = "payment_restore_accessibility"
 
         /** 製品の読み取りおよび書き込み用の設定ファイル ([com.wangzan101.mika.cap.phone.PhoneServices] によって作成)。 */
         fun prefs(context: Context): SharedPreferences = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

@@ -230,6 +230,8 @@
             android:name=".setup.PairingCodeReceiver"
             android:exported="false" />
 
+        <receiver android:name=".payment.PaymentPauseReceiver" android:exported="false" />
+
         <!-- 組み込みアシスタント (シェル ID) ハンドオーバー バインダーの入り口: シェルにはこの権限がありますが、通常のアプリにはありません。
              入力後、発信者 UID、ワンタイム パスワード、APK を確認する必要があります。HelperHub.offer を参照してください。 -->
         <provider

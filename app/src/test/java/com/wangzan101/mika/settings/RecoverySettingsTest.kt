@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import com.wangzan101.mika.core.shell.RecoveryCapability
 import com.wangzan101.mika.core.shell.RecoveryConsent
 import com.wangzan101.mika.core.shell.RestoreOutcome
+import com.wangzan101.mika.core.shell.PaymentPauseRecord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -13,6 +14,30 @@ class RecoverySettingsTest {
     private val a11y = RecoveryCapability.Accessibility
     private val battery = RecoveryCapability.BatteryWhitelist
     private val restore = RecoveryCapability.RestoreAfterReboot
+
+    @Test fun paymentPauseSurvivesRestartAndOtherSettingsWithoutChangingTheOriginalPreference() {
+        val prefs = MemoryPrefs()
+        val settings = RecoverySettings(prefs)
+        settings.savePaymentPause(PaymentPauseRecord(true))
+        settings.save(settings.consent.value.withApplied(battery, true))
+        val restarted = RecoverySettings(prefs)
+        assertEquals(PaymentPauseRecord(true), restarted.paymentPause.value)
+        assertEquals(setOf(a11y), restarted.consent.value.suspended)
+        assertTrue(a11y !in restarted.consent.value.declined)
+        assertTrue(!restarted.consent.value.wants(a11y))
+        restarted.savePaymentPause(null)
+        assertTrue(restarted.consent.value.wants(a11y))
+        assertTrue(restarted.consent.value.isApplied(battery))
+    }
+
+    @Test fun paymentPauseDoesNotEraseAnExistingAccessibilityOptOut() {
+        val prefs = MemoryPrefs()
+        val settings = RecoverySettings(prefs)
+        settings.save(RecoveryConsent(declined = setOf(a11y)))
+        settings.savePaymentPause(PaymentPauseRecord(false))
+        RecoverySettings(prefs).savePaymentPause(null)
+        assertTrue(!RecoverySettings(prefs).consent.value.wants(a11y))
+    }
 
     @Test fun freshInstallWantsEverythingAndHasNothingApplied() {
         val c = RecoverySettings(MemoryPrefs()).consent.value

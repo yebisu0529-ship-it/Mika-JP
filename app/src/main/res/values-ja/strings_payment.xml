@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="payment_channel">支払い時の一時停止</string>
+    <string name="payment_title">Mika：支払い時の一時停止</string>
+    <string name="payment_pause">支払いのため一時停止</string>
+    <string name="payment_resume">Mikaを再開</string>
+    <string name="payment_available_body">支払い前に、Mikaのユーザー補助を一時停止できます。</string>
+    <string name="payment_pausing_body">ユーザー補助と自動復旧を停止しています。完了するまでお待ちください。</string>
+    <string name="payment_paused_body">支払いのため一時停止中です。ユーザー補助と自動復旧は、Mikaを再開するまで停止します。</string>
+    <string name="payment_resuming_body">Mikaを再開しています。完了するまでお待ちください。</string>
+    <string name="payment_pause_failed">一時停止を確認できませんでした。もう一度お試しいただくか、端末のユーザー補助設定を確認してください。</string>
+    <string name="payment_resume_failed">再開できませんでした。一時停止は維持しています。スマホ操作の準備を確認して、もう一度お試しください。</string>
+</resources>

@@ -37,6 +37,42 @@ class RecoveryPermissionsTest {
         }
     }
 
+    @Test fun paymentPauseBlocksManualEnableAndAutomaticRepair() = runTest {
+        val store = Store(RecoveryConsent(suspended = setOf(RecoveryCapability.Accessibility)))
+        val shell = FakeShell(a11y = other)
+        val permissions = RecoveryPermissions({ shell }, store, pkg)
+        assertTrue(permissions.set(RecoveryCapability.Accessibility, true) is PermissionResult.Failed)
+        permissions.restartAccessibility(0)
+        assertEquals(other, shell.a11y)
+        assertTrue(shell.ran.isEmpty())
+    }
+
+    @Test fun aPauseDuringRepairPreventsTheServiceFromBeingAddedBack() = runTest {
+        val store = Store()
+        val shell = FakeShell(a11y = "$other:$mika")
+        val permissions = RecoveryPermissions({ shell }, store, pkg)
+        launch { permissions.restartAccessibility(1_000) }
+        runCurrent()
+        store.save(store.consent.value.copy(suspended = setOf(RecoveryCapability.Accessibility)))
+        testScheduler.advanceUntilIdle()
+        assertEquals(other, shell.a11y)
+    }
+
+    @Test fun paymentStopAndExplicitResumePreserveOtherServicesAndTheOriginalChoice() = runTest {
+        val original = RecoveryConsent(declined = setOf(RecoveryCapability.Accessibility),
+            suspended = setOf(RecoveryCapability.Accessibility))
+        val store = Store(original)
+        val shell = FakeShell(a11y = "$other:$mika")
+        val permissions = RecoveryPermissions({ shell }, store, pkg)
+        assertEquals(PermissionResult.Done, permissions.setAccessibilityForPayment(false))
+        assertEquals(other, shell.a11y)
+        assertEquals(original.declined, store.consent.value.declined)
+        assertEquals(PermissionResult.Done, permissions.setAccessibilityForPayment(true))
+        assertEquals("$other:$mika", shell.a11y)
+        assertEquals(original.declined, store.consent.value.declined)
+        assertEquals(original.suspended, store.consent.value.suspended)
+    }
+
     @Test
     fun accessibilityComponentKeepsTheClassNamespaceWithAnApplicationIdSuffix() {
         assertEquals("com.wangzan101.mika/.a11y.MikaAccessibilityService", PermissionCommands.accessibilityService("com.wangzan101.mika"))
