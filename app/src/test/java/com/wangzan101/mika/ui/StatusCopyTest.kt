@@ -8,6 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.wangzan101.mika.settings.AccessibilityState
 import com.wangzan101.mika.settings.Problem
 import org.junit.Test
 
@@ -24,6 +25,40 @@ class StatusCopyTest {
         assertTrue(firstThatStarts(listOf("channel", "app")) { tried += it; true })
         assertEquals(listOf("channel"), tried)
         assertFalse(firstThatStarts(listOf("channel", "app")) { false })
+    }
+
+    @Test
+    fun unavailableAccessibilityDistinguishesEnabledFromOff() {
+        assertEquals("Mika のユーザー補助サービスがオフです。システム設定の「ユーザー補助」で Mika をオンにしてください。", StatusCopy.accessibilityUnavailable(enabled = false))
+        val enabled = StatusCopy.accessibilityUnavailable(enabled = true)
+        assertTrue(enabled.contains("有効ですが"))
+        assertTrue(enabled.contains("もう一度オン"))
+        assertTrue(enabled.contains("制限された設定を許可"))
+        assertFalse(enabled.contains("オフです"))
+    }
+
+    @Test
+    fun restrictedAccessibilityPointsToAppInfoInsteadOfOnlyToggling() {
+        val p = Problem.Accessibility(AccessibilityState.EnabledNotRunning, restrictedSettings = true)
+        assertTrue(StatusCopy.banner(p).detail.contains("制限された設定を許可"))
+        val e = StatusCopy.explain(p, "14")
+        assertEquals(Fix.OpenAppInfo, e.fix)
+        assertTrue(e.body.contains("アプリ情報"))
+        assertTrue(e.body.contains("制限された設定を許可"))
+    }
+
+    @Test
+    fun lockedAccessibilityKeepsTheUnlockGuidanceEvenWhenRestricted() {
+        val p = Problem.Accessibility(
+            AccessibilityState.EnabledNotRunning,
+            userLocked = true,
+            restrictedSettings = true,
+        )
+        assertTrue(StatusCopy.banner(p).detail.contains("ロックを解除"))
+        val e = StatusCopy.explain(p, "14")
+        assertNull(e.fix)
+        assertNull(e.action)
+        assertTrue(e.body.contains("ロックを解除"))
     }
 
     @Test

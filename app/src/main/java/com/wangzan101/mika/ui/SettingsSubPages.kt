@@ -472,6 +472,7 @@ fun RoutesScreen(count: Int?, onClear: () -> Unit, onBack: () -> Unit) {
 @Composable
 fun RecoveryScreen(onBack: () -> Unit, onOpenSelfCheck: () -> Unit = {}) {
     PageScaffold(stringResource(R.string.settings_recovery), onBack) {
+        PaymentPauseControls()
         RecoverySwitches()
         GroupCard {
             ListRow(

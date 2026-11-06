@@ -146,7 +146,7 @@ class BatchRunner(
             }
             val review = i < steps.lastIndex && screen != null &&
                 (screen["imageReason"] != null || screen["protected"] == JsonPrimitive(true) ||
-                    screen["readable"] == JsonPrimitive(false) || screen["note"] != null)
+                    screen["captureError"] != null || screen["readable"] == JsonPrimitive(false) || screen["note"] != null)
             // アクションに付属する画面は、まだロード中のように見える場合があります。表示される単語が表示されるまで待ちます。再度画像を見る必要はありません。
             val until = s.until?.takeIf { hard == null && (!review || it.appears != null) }
             val waited = until?.let { tools.waitUntil(it, executor.recorder::now, steerWaiting) }

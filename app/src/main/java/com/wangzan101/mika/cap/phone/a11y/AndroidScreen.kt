@@ -185,6 +185,7 @@ class AndroidScreen(
         val late = if (register) lateSpill() else null
         val r = read()
         val after = treeHash()
+        val foreground = if (r.topPackage == null) foregroundTaskPackage() else null
         val snap = NodeSnapshot(snapshotId(), r.entries)
         if (register) ids.put(snap)
         ScreenSnapshot(
@@ -194,12 +195,14 @@ class AndroidScreen(
             width = screenWidth,
             height = screenHeight,
             changedDuringRead = after != r.hash,
-            protected = r.hasAppWindow && frameBlack() == true,
             hasWindow = r.anyAppWindow,
-            unreadableApp = if (r.topPackage == null) foregroundTaskPackage() else null,
+            unreadableApp = foreground,
             windows = r.windows,
             // はまだホーム画面でユーザーが選択するのを待っています: とにかく言ってください
             opened = late?.opened ?: _userPick.value?.let { OpenedElsewhere(it.packageName, it.app, pulledBack = false, picker = true) },
+            // 黑帧只说明画面不可用,不能据此声称窗口防截屏;读屏元素仍可作为降级路径。
+            captureError = if ((r.anyAppWindow || foreground != null) && frameServable() && frameBlack() == true)
+                ScreenDiagnosis.DISPLAY_CAPTURE_UNAVAILABLE else null,
         )
     }
 
@@ -229,26 +232,51 @@ class AndroidScreen(
         TargetApp(pkg, task, userOf(task))
     }.distinctUntilChanged { a, b -> a.packageName == b.packageName && a.userId == b.userId }
 
-    override suspend fun screenshotPng(): ByteArray? = withContext(Dispatchers.IO) { display.current?.latestFramePng() }
+    override suspend fun screenshotPng(): ByteArray? = withContext(Dispatchers.IO) {
+        // 黑图没有可用画面信息,也不能凭它区分安全窗口和合成失败;不要交给模型或 OCR。
+        if (!frameServable() || frameBlack() == true) return@withContext null
+        display.current?.latestFramePng()
+    }
+
+    /** 最近一次启动开始的时刻;到这次启动之后的帧为止,不把旧帧当画面(见 [FrameFreshness])。 */
+    @Volatile private var frameGuardSince: Long? = null
+
+    /** 此刻能不能把 Agent 屏的最新帧交给模型:启动后还没收到新帧时不给,直到新帧到达才解除。 */
+    private fun frameServable(): Boolean = when (FrameFreshness.serve({ display.current?.lastFrameAt() }, frameGuardSince)) {
+        FrameFreshness.Serve.Guarded -> false
+        FrameFreshness.Serve.Fresh -> {
+            frameGuardSince = null
+            true
+        }
+    }
+
+    /** 等这次画面变化之后的首帧;等不到也继续保持保护,不能把旧帧放行。 */
+    private suspend fun awaitFrameAfter(startedAt: Long) {
+        frameGuardSince = startedAt
+        if (FrameFreshness.awaitNewFrame(
+                { SystemClock.uptimeMillis() },
+                ::delay,
+                { display.current?.lastFrameAt() },
+                startedAt,
+            )
+        ) frameGuardSince = null
+    }
 
     /**
      * は画面上のテキストを認識します。自己描画インターフェイスではアクセシビリティの問題はほとんどありません。インシデントが静かな場合は、画面がまだ遷移している可能性があります。画面が停止するまで待ってから認識してください。認識プロセス中にページ全体が変更された場合は、新しいページを押して、再度認識します。
      * (ルールについては [StillFrameRead] を参照)。部分的に動くパーツ (アニメーション化されたアバター、カーソル) は単語の位置に影響を与えないため、単語を完全に破棄することなく、そのまま使用できます。
      */
     override suspend fun readVisibleText(): List<VisibleTextLine>? = withContext(Dispatchers.IO) {
-        if (!hasDisplay || frameBlack() == true) return@withContext null
+        if (!hasDisplay || !frameServable() || frameBlack() == true) return@withContext null
         StillFrameRead.read(SystemClock::uptimeMillis, { delay(it) }, ::frameSignature) {
             display.current?.latestFrameBitmap()?.let { PhoneOcr.read(it) }
         }
     }
 
     override suspend fun frameGrid(): FrameGrid? = withContext(Dispatchers.IO) {
+        if (!frameServable()) return@withContext null
         val bmp = display.current?.frames?.value ?: return@withContext null
         runCatching { FrameGrid.sample(bmp.width, bmp.height, bmp::getPixel) }.getOrNull()
-    }
-
-    override suspend fun isProtected(): Boolean = withContext(Dispatchers.IO) {
-        hasDisplay && read().hasAppWindow && frameBlack() == true
     }
 
     override suspend fun checkScreen(): ScreenCheck = withContext(Dispatchers.IO) {
@@ -715,6 +743,8 @@ class AndroidScreen(
         // 開く前の上部ウィンドウ: 後でポップアップする選択ボックスは、今回開いたことによって生じた選択ボックスである可能性があります (前回は選択されておらず、再度開いても同じ選択ボックスです)
         val before = if (hasDisplay) topWindowPackage().takeIf { it != chooserPackage } else null
         val id = display.get().displayId
+        // 画面新鲜度从这次启动开始算:之后的截图、认字只认这之后到的帧(见 FrameFreshness)
+        val startedAt = SystemClock.uptimeMillis()
         beforeOpen(packageName, user)
         fun launch() = when {
             user != null -> shell.startAppInUser(id, packageName, user, cold)
@@ -736,7 +766,10 @@ class AndroidScreen(
             ShellService.START_USER_NOT_ALLOWED -> return@withContext ActionResult.Failed(COPY_NOT_FOUND)
             else -> return@withContext ActionResult.Failed("launch_failed")
         }
-        awaitOpened(packageName, before, hint = if (code == ShellService.START_OK_COLD_IGNORED) HINT_COLD_IGNORED else null, user = user)
+        // 同一个 App 只是回到已有静态页时可能不会来新帧,旧帧仍就是当前画面;冷启动、另一份用户或换 App 必须等新帧。
+        val needsNewFrame = cold || user != null || before != packageName
+        awaitOpened(packageName, before, hint = if (code == ShellService.START_OK_COLD_IGNORED) HINT_COLD_IGNORED else null, user = user,
+            launchedAt = if (needsNewFrame) startedAt else 0L)
     }
 
     /**
@@ -751,6 +784,7 @@ class AndroidScreen(
         }
         val before = if (hasDisplay) topWindowPackage().takeIf { it != chooserPackage } else null
         val id = display.get().displayId
+        val startedAt = SystemClock.uptimeMillis()
         beforeOpen(packageName, null)
         val code = runCatching { shell.startShare(id, packageName, text) }.getOrDefault(ShellService.START_ERROR)
         if (code != ShellService.START_OK) notOpened(packageName, null)
@@ -761,7 +795,7 @@ class AndroidScreen(
             ShellService.START_UNRESOLVED -> return@withContext ActionResult.Failed("cannot_share")
             else -> return@withContext ActionResult.Failed("launch_failed")
         }
-        awaitOpened(packageName, before, hint = null, sharing = true)
+        awaitOpened(packageName, before, hint = null, sharing = true, launchedAt = startedAt)
     }
 
     /**
@@ -772,22 +806,34 @@ class AndroidScreen(
     suspend fun openOwnPage(intent: Intent): ActionResult = withContext(Dispatchers.IO) {
         val before = if (hasDisplay) topWindowPackage().takeIf { it != chooserPackage } else null
         val id = display.get().displayId
+        val startedAt = SystemClock.uptimeMillis()
         when (runCatching { shell.startSystemAction(id, intent, null) }.getOrDefault(ShellService.START_ERROR)) {
             ShellService.START_OK -> Unit
             ShellService.START_INVALID_LINK -> return@withContext ActionResult.Failed("own_page_not_allowed")
             else -> return@withContext ActionResult.Failed("launch_failed")
         }
-        awaitOpened(a11y.packageName, before, hint = null)
+        awaitOpened(a11y.packageName, before, hint = null, launchedAt = if (before != a11y.packageName) startedAt else 0L)
     }
 
     /**
      * が開始された後: [packageName] が Mega 画面の最上部に到達するまで待機するか、システムがどちらを最初に開くかを尋ねます ([before] は、開始前に最上部のウィンドウがあったパッケージです)。
      * [sharing]: 今回は共有についてです (アプリに複数の共有ページがある場合、システムはどれを使用するかを尋ね、アプリ名はオプションに含まれない場合があります): システム パッケージが一番上にあるウィンドウも、質問としてカウントされます。
      */
-    private suspend fun awaitOpened(packageName: String, before: String?, hint: String?, sharing: Boolean = false, user: Int? = null): ActionResult {
+    private suspend fun awaitOpened(
+        packageName: String, before: String?, hint: String?, sharing: Boolean = false, user: Int? = null, launchedAt: Long = 0L,
+    ): ActionResult {
+        val beforeTree = treeHash()
         targetPackage = packageName
         chooserPackage = null
         requestedUser = user
+        // 从等待窗口到顶起就保护所有返回路径(包括系统选择器),不是只有最后的成功路径才拦旧帧。
+        // 同 App 静态页可以不另等新帧,但不能借此清掉上一次尚未由新帧解除的保护。
+        if (launchedAt > 0) frameGuardSince = launchedAt
+        // 只有确实还在原来的页面,失败后才能继续用原来的静态帧;已经切走或换页时仍须等新帧。
+        fun clearGuardIfUnchanged() {
+            val now = foregroundTaskPackage() ?: ScreenReader.topPackage(windows())
+            if (now == before && treeHash() == beforeTree) frameGuardSince = null
+        }
         // が開きました: ミカ 画面の一番上のタスクはこれです (タスクを要求できない場合は、一番上のウィンドウに戻って読みやすいようにしてください)。どちらを指定するかはユーザーのタスクである必要があります
         fun launched(): Boolean = (foregroundTaskPackage()?.let { it == packageName } ?: (ScreenReader.topPackage(windows()) == packageName)) &&
             (user == null || userOf(runCatching { shell.topTaskId(displayId) }.getOrDefault(-1)).let { it < 0 || it == user })
@@ -802,8 +848,10 @@ class AndroidScreen(
         if (!onTop && user != null) {
             // は別のコピーを必要としていますが、システムは最初にどれを開くかを尋ねます。オプションを 1 つずつクリックして、モデルの推測に任せることなく、どのコピーが開かれているかを識別します。
             if (chooserTargets(packageName, before) != null) return resolveCopyChooser(packageName, user, before, hint)
+                .also { if (it is ActionResult.Failed) clearGuardIfUnchanged() }
             // 直接開かれているのは、このアプリの別のコピーです。このままでは失敗し、目的のコピーではありません。
             if (foregroundTaskPackage() == packageName) return copyNotOpened(user, userOf(runCatching { shell.topTaskId(displayId) }.getOrDefault(-1)))
+                .also { clearGuardIfUnchanged() }
         }
         // システムはどちらを開くかを尋ねています (アプリのコピーが 2 つインストールされているなど)。開いています。モデルが選択されるまで待ちます。アプリを選択すると、フロントデスクに来て、その後のアクションは通常どおりターゲットとして認識されます。
         // アプリが既に最上位にあるときに覆われたシステム ウィンドウ (許可ボックス) はカウントされません。
@@ -821,11 +869,15 @@ class AndroidScreen(
         }
         // まだ開いていない場合は、現時点で一番上にあるものについて真実を話してください。成功報告をしない場合は、
         if (!onTop) {
+            clearGuardIfUnchanged()
             val now = foregroundTaskPackage() ?: ScreenReader.topPackage(windows())
             // は別のコピーを必要としていますが、一番上のものがこのアプリの別のコピーです
             val copy = if (user != null && now == packageName) " (a different copy of the app)" else ""
             return ActionResult.Failed("app_not_in_front", hint = now?.let { "In the foreground now: $it$copy." } ?: "Nothing came to the foreground.")
         }
+        // 树稳定只是窗口到了顶,画面可能还没合成:等这次启动之后的第一帧;等不到就持续拦住旧帧,
+        // 不把上一屏留在缓冲里的残影当这次打开的画面交给模型(issue #253)
+        if (launchedAt > 0) awaitFrameAfter(launchedAt)
         // は開いていますが、別のパッケージのウィンドウがそれを覆っています (許可ポップアップ ウィンドウ、アカウント セレクター)。正直に言って、それが誰であるかを教えてください。まだ開いています。
         val cover = ScreenReader.topPackage(windows())?.takeIf { it != packageName }
         return ok(hint = hint).let { if (cover != null) it.copy(coveredBy = cover, appSwitched = null, switchedByTarget = false) else it }
@@ -906,6 +958,7 @@ class AndroidScreen(
         if (checkOtherTasks && expected != null && !reserve(expected)) return@withContext IN_USE_BY_OTHER
         val before = ScreenReader.topPackage(windows())
         val beforeTree = treeHash()
+        val startedAt = SystemClock.uptimeMillis()
         // は、誰が開いたかを事前に知っています (アプリ、設定ページ、およびアプリへのリンクが 1 つだけ指定されています): 開始する前に終了します。
         val early = expected ?: linkHandler(action, uri)
         early?.let { beforeOpen(it, null) }
@@ -919,6 +972,8 @@ class AndroidScreen(
             ShellService.START_INVALID_LINK -> return@withContext ActionResult.Failed("invalid_link")
             else -> return@withContext ActionResult.Failed("launch_failed")
         }
+        // 链接可能落到另一个 App、系统选择器或同 App 的新页面,同样不能把启动前的帧交出去。
+        frameGuardSince = startedAt
         fun landed(): Boolean {
             val top = ScreenReader.topPackage(windows())
             return if (expected != null) top == expected else top != null && (top != before || treeHash() != beforeTree)
@@ -927,6 +982,8 @@ class AndroidScreen(
         while (!landed() && SystemClock.uptimeMillis() < deadline) delay(POLL_MS)
         waitStable(SETTLE_CAP_MS)
         val top = ScreenReader.topPackage(windows())
+        val changed = top != before || treeHash() != beforeTree
+        if (changed) awaitFrameAfter(startedAt) else frameGuardSince = null
         // リンクされたアプリのみを開きます。システム セレクターまたはその他の場所にある場合は、ターゲットとして扱いません。
         val opened = top?.takeIf { if (expected != null) it == expected else it !in systemPickers }
         if (opened != null) {
@@ -1014,6 +1071,8 @@ class AndroidScreen(
         val alarmBefore = runCatching { alarms?.nextAlarmClock?.triggerTime }
         val id = display.get().displayId
         val topBefore = ScreenReader.topPackage(windows())
+        val beforeTree = treeHash()
+        val startedAt = SystemClock.uptimeMillis()
         val w = armSpillWatch()
         // によって引き継がれたページには、シェルに必要な権限 (目覚まし時計の設定) がない可能性があります。Mika として開始したものを準備してください。
         val asMika = PendingIntent.getActivity(a11y, SYSTEM_ACTION_REQUEST, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -1028,6 +1087,7 @@ class AndroidScreen(
             ShellService.START_UNRESOLVED -> return@withContext SystemActionResult(ActionResult.Failed(SystemActionResult.NOT_SUPPORTED))
             else -> return@withContext SystemActionResult(ActionResult.Failed("launch_failed"), pkg)
         }
+        if (!action.silent) frameGuardSince = startedAt
         fun top() = ScreenReader.topPackage(windows())
         var alarmAfter = alarmBefore.getOrNull()
         if (action is SystemAction.SetAlarm && alarmBefore.isSuccess) {
@@ -1046,6 +1106,10 @@ class AndroidScreen(
         val landed = top() == pkg
         // は静かにセットアップされているはずですが、画面にはそのアプリのインターフェイスが表示されています
         val showing = action.silent && landed && topBefore != pkg
+        if (!action.silent || showing) {
+            val changed = top() != topBefore || treeHash() != beforeTree
+            if (changed) awaitFrameAfter(startedAt) else frameGuardSince = null
+        }
         if (landed && (!action.silent || showing)) {
             targetPackage = pkg
             requestedUser = null
@@ -1210,12 +1274,14 @@ class AndroidScreen(
     @Volatile private var tapWatch: Job? = null
     @Volatile private var tapWatchUntil = 0L
 
-    /** には、ホーム画面で開かれたものは含まれません。Mika 自体、デスクトップ アプリ (HOME を押して分析します。ハードコードは行わないでください)。 */
-    private val notSpills: Set<String> by lazy {
+    /** 用户回主屏桌面的导航证据；桌面 App 按 HOME 解析，不写死。 */
+    private val homeApps: Set<String> by lazy {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        runCatching { a11y.packageManager.queryIntentActivities(home, 0).map { it.activityInfo.packageName } }.getOrDefault(emptyList())
-            .toSet() + a11y.packageName
+        runCatching { a11y.packageManager.queryIntentActivities(home, 0).map { it.activityInfo.packageName } }.getOrDefault(emptyList()).toSet()
     }
+
+    /** 不算开到主屏上的:Mika 自己、桌面 App。 */
+    private val notSpills: Set<String> by lazy { homeApps + a11y.packageName }
 
     /** アクションを起こす前に: 内蔵アシスタントを使用してホーム画面を見つめ、現時点で 2 つの画面の上部にあるタスクを書き留めてください。画面がない場合、画面が引き継がれている場合、またはアシスタントがサポートしていない場合は、null (見つめられていない) になります。 */
     private fun armSpillWatch(): Watch? {
@@ -1234,10 +1300,14 @@ class AndroidScreen(
         tapWatch = spillScope.launch(start = CoroutineStart.UNDISPATCHED) {
             val collecting = launch(start = CoroutineStart.UNDISPATCHED) {
                 a11y.eventsFor(Display.DEFAULT_DISPLAY).collect { e ->
-                    if ((e.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED || e.eventType == AccessibilityEvent.TYPE_VIEW_LONG_CLICKED) &&
-                        e.packageName?.toString() != a11y.packageName
+                    val systemTouch = e.eventType == AccessibilityEvent.TYPE_TOUCH_INTERACTION_START
+                    if (MainScreenSpill.isUserTap(e.eventType) &&
+                        // Mika 浮层自己的控件点击不是用户打开了别的 App;系统触摸事件没有这种包名歧义
+                        (systemTouch || e.packageName?.toString() != a11y.packageName)
                     ) {
-                        userTaps.addLast(MainScreenSpill.Tap(SystemClock.uptimeMillis(), e.packageName?.toString()))
+                        // 系统触摸事件带有真实发生时刻;通知栏、桌面等不发控件点击事件的入口也不能漏掉
+                        val at = if (systemTouch) e.eventTime else SystemClock.uptimeMillis()
+                        userTaps.addLast(MainScreenSpill.Tap(at, e.packageName?.toString()))
                         while (userTaps.size > MAX_USER_TAPS) userTaps.pollFirst()
                     }
                 }
@@ -1261,7 +1331,7 @@ class AndroidScreen(
         val arrivals = parseArrivals(b)
         arrivals.maxOfOrNull { it.at }?.let { consumed = maxOf(consumed, it) }
         var last: Spill? = null
-        for (v in MainScreenSpill.decide(arrivals, w.since, SPILL_WINDOW_MS, w.topBefore, notSpills, userTaps.toList())) {
+        for (v in MainScreenSpill.decide(arrivals, w.since, SPILL_WINDOW_MS, w.topBefore, notSpills, userTaps.toList(), homeApps)) {
             val a = v.arrival
             val pkg = a.packageName ?: continue
             // アプリケーションのアクセス境界からは見えないユーザーのホーム画面の画面を開きます: 無効な項目は移動または読み取りできません
@@ -1409,7 +1479,7 @@ class AndroidScreen(
             val deadline = gone + PICK_WAIT_MS
             while (true) {
                 val arrivals = runCatching { shell.mainArrivals(p.since) }.getOrNull()?.let(::parseArrivals).orEmpty()
-                val opened = MainScreenSpill.picked(arrivals, p.taskId, gone, PICK_SLACK_MS, PICK_WAIT_MS, p.topBefore, notSpills)
+                val opened = MainScreenSpill.picked(arrivals, p.taskId, gone, PICK_SLACK_MS, PICK_WAIT_MS, p.topBefore, notSpills, homeApps)
                 arrivals.maxOfOrNull { it.at }?.let { consumed = maxOf(consumed, it) }
                 if (opened != null) {
                     val pkg = opened.packageName!!

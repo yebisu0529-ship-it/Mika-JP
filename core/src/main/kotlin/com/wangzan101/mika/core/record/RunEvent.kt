@@ -240,6 +240,7 @@ sealed interface RunEvent {
     @Serializable @SerialName("model_calls")
     data class ModelCalls(
         override val atMs: Long, val calls: Int, val unreported: Int, val inputTokens: Long, val outputTokens: Long, val cachedTokens: Long,
+        val httpCalls: Int? = null, val httpUnreported: Int? = null,
     ) : RunEvent
 
     /**

@@ -19,7 +19,7 @@ fun interface KeyingMaterialExporter {
 
 /**
  * adb は TLS 1.3 を使用します: 双方が自己署名証明書を提示し、互いの証明書チェーンを検証しません。 ペアリングの際、
- * の ID は SPAKE2 によってエクスポートされたキーにバインドされます。接続時に、デバイスは証明書内の公開キーを比較します。ローカル ループバック アドレスにのみ接続してください。
+ * の ID は SPAKE2 によってエクスポートされたキーにバインドされます。接続時に、デバイスは証明書内の公開キーを比較します。この端末自身のアドレスにのみ接続します。
  */
 class AdbTls(
     val identity: AdbIdentity,
@@ -32,23 +32,24 @@ class AdbTls(
         ctx
     }
 
-    /** 新しい TCP 接続を作成し、TLS ハンドシェイク (クライアント) を完了します。 */
-    fun connect(host: String, port: Int, timeoutMs: Int): SSLSocket {
+    /** 用调用方已核对的 [target] 新建 TCP 连接并完成 TLS 握手;不重新解析主机名。 */
+    fun connect(target: InetSocketAddress, timeoutMs: Int): SSLSocket {
         val plain = Socket()
         try {
             plain.tcpNoDelay = true
-            plain.connect(InetSocketAddress(host, port), timeoutMs)
+            plain.connect(target, timeoutMs)
             plain.soTimeout = timeoutMs
         } catch (e: Exception) {
             plain.close()
             throw e
         }
-        return wrap(plain, host, port, client = true)
+        return wrap(plain, target, client = true)
     }
 
     /** は既存の接続で TLS ハンドシェイクを実行します。 [client] = false は、テストの偽サーバーにのみ使用されます。 */
-    fun wrap(plain: Socket, host: String, port: Int, client: Boolean): SSLSocket {
-        val s = context.socketFactory.createSocket(plain, host, port, true) as SSLSocket
+    fun wrap(plain: Socket, target: InetSocketAddress, client: Boolean): SSLSocket {
+        val host = target.address?.hostAddress ?: throw IllegalArgumentException("ADB address must be resolved")
+        val s = context.socketFactory.createSocket(plain, host, target.port, true) as SSLSocket
         try {
             s.enabledProtocols = arrayOf("TLSv1.3")
             s.useClientMode = client

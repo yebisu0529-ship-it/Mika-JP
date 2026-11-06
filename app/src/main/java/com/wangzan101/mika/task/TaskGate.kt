@@ -4,6 +4,7 @@ import com.wangzan101.mika.R
 import com.wangzan101.mika.i18n.tr
 import com.wangzan101.mika.core.agent.GateReason
 import com.wangzan101.mika.core.agent.TaskState
+import com.wangzan101.mika.core.shell.PaymentPauseRecord
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -14,14 +15,20 @@ import kotlinx.coroutines.flow.update
  * 1. モバイル操作アシスタントが利用できない → 一時停止し、再開するまで待ち、ユーザーが「続行」をクリックします。
  * 2. タスクがホーム画面に移動され (ユーザーがホーム画面でアプリを開いた) → 一時停止され、ユーザーは仮想画面に戻す前に「続行」をクリックします。
  *    ミカはユーザーが使い終わったかどうかを判断せず、ユーザーの目の前でアプリを取り上げることを避けます。
- * 3. 画面が消えるかロックされる → ロックが解除されるまで待ち、画面がオンになりロックが解除されると自動的に続行されます。
+ * 3. 画面が消えるかロックされる → 定時タスクは本人の設定に従って起動・解除を試し、ほかのタスクは解除を待ちます。
  * 最初の 2 つは、このステップで携帯電話が使用されている場合にのみチェックされます (電話は true)。Web ページおよびサンドボックス上のステップはアシスタントを必要とせず、ホーム画面には移動されません。
  * また、ブラウザページでタスクが貸し出されているページ([onUserOnPage])をタッチ→どの画面を使用しても最初に停止し、「続行」をクリックして続行します。
  * インターフェースに触れないステップ（モデル推論、画面読み取り）はここを経由せず、通常通りに進みます。
+ * 支払いのための一時停止は、これらの処理より先に確認する。
  */
 class TaskGate(
     private val locked: StateFlow<Boolean>,
     private val shellAvailable: StateFlow<Boolean>,
+    private val paymentPause: StateFlow<PaymentPauseRecord?> = MutableStateFlow(null),
+    /** 操作直前にロック状態を再確認し、消灯通知の遅延中も操作を通さない。 */
+    private val refreshLocked: (() -> Unit)? = null,
+    /** 無人実行中のロック時に呼び出し、戻る前にシステムの状態から [locked] を更新する。 */
+    private val unattendedUnlock: (suspend () -> Unit)? = null,
     private val moveBack: suspend () -> Boolean,
 ) {
     private val movedAway = MutableStateFlow(false)
@@ -55,8 +62,13 @@ class TaskGate(
 
     suspend fun pass(phone: () -> Boolean = { true }, setWaiting: (TaskState?) -> Unit) {
         while (true) {
+            refreshLocked?.invoke()
             val onPhone = phone()
             when {
+                paymentPause.value != null -> {
+                    setWaiting(TaskState.Held(GateReason("payment_paused", tr(R.string.payment_paused_body))))
+                    paymentPause.first { it == null }
+                }
                 userOnPage.value -> {
                     setWaiting(TaskState.Held(paused(USER_ON_PAGE)))
                     userOnPage.first { !it }
@@ -71,7 +83,13 @@ class TaskGate(
                 }
                 locked.value -> {
                     setWaiting(TaskState.Held(LOCKED))
-                    locked.first { !it }
+                    if (unattendedUnlock == null) {
+                        locked.first { !it }
+                    } else {
+                        unattendedUnlock.invoke()
+                        // 无人值守时不能无限等用户来解锁；只认刷新后的系统状态，不认流程自称成功。
+                        if (locked.value) throw UnattendedLockException(tr(R.string.trigger_unlock_failed))
+                    }
                 }
                 else -> {
                     setWaiting(null)
@@ -117,3 +135,6 @@ class TaskGate(
         val USER_ON_PAGE: String get() = tr(R.string.gate_user_on_page)
     }
 }
+
+/** 无人值守任务无法通过系统锁屏；由任务服务转成有结果通知的失败终态。 */
+internal class UnattendedLockException(override val message: String) : Exception(message)

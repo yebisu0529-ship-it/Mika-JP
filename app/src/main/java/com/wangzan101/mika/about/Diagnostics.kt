@@ -68,6 +68,10 @@ data class DiagnosticsSnapshot(
         val appsAfterTask: String? = null,
         /** su の有無、2つのスイッチ、su の応答。コマンド内容は含めず、旧呼び出し元が渡さなければ null。 */
         val root: String? = null,
+        /** 最近启动助手到达的固定阶段;这次进程还没启动过为 null。 */
+        val helperLaunchStage: String? = null,
+        /** 最近一次 Binder 交接拒绝的固定枚举;没有被拒过为 null。 */
+        val helperHandoffRejection: String? = null,
     )
 
     data class Recovery(
@@ -241,6 +245,8 @@ object Diagnostics {
         line("attention channel", importance(p.attentionChannelImportance))
         line("Wi-Fi", when (p.wifiConnected) { true -> "connected"; false -> "not connected"; null -> "unknown" })
         line("last error", p.lastError?.takeIf { it.isNotBlank() }?.take(MAX_ERROR) ?: "none")
+        line("helper launch stage", p.helperLaunchStage ?: "not tried in this session")
+        line("helper handoff rejection", p.helperHandoffRejection ?: "none")
         line("adb key status", p.adbKey ?: "unknown")
         p.root?.let { line("root", it) }
         line("app copies", p.appCopies ?: "unknown")

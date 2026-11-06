@@ -84,7 +84,7 @@ class PhoneSetupCopyTest {
         assertEquals(
             // root が拒否または応答なしなら、再試行で su に要求し直す。
             listOf(
-                BuiltinShellFailure.ConnectFailed, BuiltinShellFailure.HelperStartFailed,
+                BuiltinShellFailure.ConnectFailed, BuiltinShellFailure.NotLocal, BuiltinShellFailure.HelperStartFailed,
                 BuiltinShellFailure.RootDenied, BuiltinShellFailure.RootNoAnswer, BuiltinShellFailure.Unknown,
             ),
             reconnectable.map { (it as BuiltinShellStatus.Failed).reason },
@@ -199,5 +199,23 @@ class PhoneSetupCopyTest {
         assertTrue(note, note.contains("シェルユーザーとしての起動"))
         assertTrue(note, note.contains("root コマンドの実行許可は別の設定"))
         assertTrue(note, note.contains("root 管理環境によっては利用できない"))
+    }
+
+    /** USB接続を外した後の動作を保証せず、停止時の再起動方法を案内する。 */
+    @Test
+    fun usbCopyDoesNotPromiseUnplugSurvival() {
+        listOf(
+            PhoneSetupCopy.successNote(HelperRestart.UsbCommand),
+            PhoneSetupCopy.usageNote(HelperRestart.UsbCommand),
+            PhoneSetupCopy.usbCard(HelperRestart.UsbCommand).second,
+        ).forEach { text ->
+            assertTrue(text, text.contains("多くの端末"))
+            assertTrue(text, text.contains("停止"))
+            assertTrue(text, text.contains("もう一度"))
+            assertFalse(text, text.contains("ケーブルを抜いても必ず"))
+        }
+        // ワイヤレス接続の案内にはUSB固有の停止条件を混ぜない。
+        assertFalse(PhoneSetupCopy.successNote(HelperRestart.Wireless).contains("ケーブルを抜いて"))
+        assertFalse(PhoneSetupCopy.usageNote(HelperRestart.Wireless).contains("ケーブルを抜いて"))
     }
 }

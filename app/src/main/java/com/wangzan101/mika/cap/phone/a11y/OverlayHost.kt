@@ -289,6 +289,15 @@ class OverlayWindow internal constructor(
     }
 
     /**
+     * ウィンドウ全体を明示的に表示・非表示にする。内容を空にするだけでは旧フレームが残るため、
+     * ウィンドウの切り替え時には可視性も切り替える。
+     */
+    fun setVisible(visible: Boolean) {
+        if (!isOpen) return
+        frame.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+    }
+
+    /**
      * はキーボードを受け取ることができますか: フローティング レイヤーに入力するときにキーボードを開き (キーボードに面する入力メソッドがポップアップします)、閉じるとすぐに閉じ、フォーカスが下のアプリに戻る必要があります。
      */
     fun setFocusable(focusable: Boolean) {

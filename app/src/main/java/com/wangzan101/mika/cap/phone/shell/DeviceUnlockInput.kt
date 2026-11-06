@@ -8,6 +8,8 @@ import android.view.InputDevice
 import android.view.InputEvent
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.WindowManager
 import com.wangzan101.mika.core.device.CredentialKind
 import com.wangzan101.mika.core.device.DeviceCredential
 
@@ -16,7 +18,7 @@ import com.wangzan101.mika.core.device.DeviceCredential
  * 証明書の各キーストロークは [injectTo] を介して渡され、SystemUI が所有するフォーカス ウィンドウにのみキャストされます。ロック画面の上には他のウィンドウがあります (画面がロックされているときに表示されるアプリ、着信、
  * 全画面通知）またはロックが解除されてアプリに戻された場合、システムは挿入を拒否し、キーが他の場所に落ちることはありません。 [inject] は、シークレットのない明るい画面キーにのみ使用されます。
  */
-internal class DeviceUnlockInput(context: Context, private val inject: (InputEvent) -> Boolean,
+internal class DeviceUnlockInput(private val context: Context, private val inject: (InputEvent) -> Boolean,
     private val injectTo: (InputEvent, Int) -> Boolean, private val command: (List<String>) -> Boolean) {
     private val keyguard = context.getSystemService(KeyguardManager::class.java)
     private val power = context.getSystemService(PowerManager::class.java)
@@ -26,6 +28,41 @@ internal class DeviceUnlockInput(context: Context, private val inject: (InputEve
     fun wake(): Boolean = key(KeyEvent.KEYCODE_WAKEUP, send = inject) || command(listOf("input", "keyevent", "224"))
 
     fun dismiss(): Boolean = command(listOf("wm", "dismiss-keyguard"))
+
+    /** 安全锁屏仍停在通知/指纹页时做一次通用的上滑。事件定向给 SystemUI,解锁中途完成也不会落进前台 App。 */
+    fun reveal(): Boolean {
+        val target = systemUiUid ?: return false
+        if (!power.isInteractive || !keyguard.isKeyguardLocked || !keyguard.isDeviceLocked) return false
+        val bounds = runCatching { context.getSystemService(WindowManager::class.java).currentWindowMetrics.bounds }.getOrNull() ?: return false
+        val x = bounds.exactCenterX()
+        val startY = bounds.bottom - bounds.height() * 0.15f
+        val endY = bounds.top + bounds.height() * 0.45f
+        val downAt = SystemClock.uptimeMillis()
+        fun send(action: Int, at: Long, y: Float): Boolean {
+            val event = MotionEvent.obtain(downAt, at, action, x, y, 0)
+            return try {
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                injectTo(event, target)
+            } finally {
+                event.recycle()
+            }
+        }
+        if (!send(MotionEvent.ACTION_DOWN, downAt, startY)) return false
+        var completed = false
+        try {
+            repeat(6) { step ->
+                if (!power.isInteractive || !keyguard.isKeyguardLocked || !keyguard.isDeviceLocked) return false
+                SystemClock.sleep(24)
+                val progress = (step + 1) / 6f
+                if (!send(MotionEvent.ACTION_MOVE, SystemClock.uptimeMillis(), startY + (endY - startY) * progress)) return false
+            }
+            if (!power.isInteractive || !keyguard.isKeyguardLocked || !keyguard.isDeviceLocked) return false
+            completed = send(MotionEvent.ACTION_UP, SystemClock.uptimeMillis(), endY)
+            return completed
+        } finally {
+            if (!completed) send(MotionEvent.ACTION_CANCEL, SystemClock.uptimeMillis(), endY)
+        }
+    }
 
     fun enter(kind: Int, bytes: ByteArray): Boolean {
         var chars = CharArray(0)

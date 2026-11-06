@@ -43,6 +43,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * には、アシスタントの自動回復機能といくつかの機能が組み込まれています。 [runner] を使用してシェル コマンドを実行します (アシスタントまたはペア接続経由。どちらも使用できない場合は指定されません)。
@@ -59,6 +61,7 @@ class BuiltinShellRecovery(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var started = false
+    private val accessibilityChange = Mutex()
 
     val permissions: RecoveryPermissions by lazy {
         // アシスタントが実行中 (起動方法に関係なく) またはペアリングされている場合、コマンドは使用可能になります。
@@ -70,7 +73,10 @@ class BuiltinShellRecovery(
      * アプリ システム設定を変更する権限 (「再起動後の自動回復」によって付与) がある場合は、アシスタントを待たずに直接書き込むことができます。アシスタントを経由する必要はありません。 手順は、
      */
     val accessibilityRepair = AccessibilityRepair(
-        restart = { gap -> if (canWriteSecure()) restartDirectly(gap) else permissions.restartAccessibility(gap) },
+        restart = { gap -> accessibilityChange.withLock {
+            if (RecoveryCapability.Accessibility in settings.consent.value.suspended) PermissionResult.Done
+            else if (canWriteSecure()) restartDirectly(gap) else permissions.restartAccessibility(gap)
+        } },
         consent = { settings.consent.value },
         direct = ::canWriteSecure,
     )
@@ -93,6 +99,7 @@ class BuiltinShellRecovery(
                 write(AccessibilityList.without(current, me))
                 withContext(NonCancellable) {
                     delay(gapMs)
+                    if (RecoveryCapability.Accessibility in settings.consent.value.suspended) return@withContext
                     // 追加が失敗すると、Mika がリストから消えるのを防ぐために、元のリスト (メイン スイッチとともに) が書き戻されます。今回も追加の失敗が報告されています。
                     try {
                         write(AccessibilityList.with(read(), me))
@@ -110,6 +117,32 @@ class BuiltinShellRecovery(
         } catch (e: Exception) {
             PermissionResult.Failed(e.message ?: e.javaClass.simpleName)
         }
+    }
+
+    /** 支払い通知からの操作。修復中の書き戻しが終わってから変更し、実際の接続状態も確認する。 */
+    suspend fun setAccessibilityForPayment(on: Boolean): Boolean = accessibilityChange.withLock {
+        if (on && accessibility.value.let { it.enabled && it.connected }) return@withLock true
+        val result = if (canWriteSecure()) withContext(Dispatchers.IO) {
+            runCatching {
+                val cr = app.contentResolver
+                val current = Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+                val me = PermissionCommands.accessibilityService(app.packageName)
+                val next = if (on) AccessibilityList.with(current, me) else AccessibilityList.without(current, me)
+                check(Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, next.ifEmpty { null }))
+                check(Settings.Secure.putInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, if (next.isEmpty()) 0 else 1))
+                PermissionResult.Done
+            }.getOrElse { PermissionResult.Failed(it.javaClass.simpleName) }
+        } else permissions.setAccessibilityForPayment(on)
+        // 自分のサービスを止めるだけなら、ヘルパーや追加の権限がなくても実行できる。
+        if (!on) withContext(Dispatchers.Main.immediate) {
+            ScreenAccessibility.instance.value?.disableSelf()
+        }
+        if (on && result != PermissionResult.Done) return@withLock false
+        val confirmed = withTimeoutOrNull(2_500L) {
+            accessibility.first { if (on) it.enabled && it.connected else !it.enabled && !it.connected }
+        } != null
+        if (confirmed) settings.save(settings.consent.value.withApplied(RecoveryCapability.Accessibility, on))
+        confirmed
     }
 
     /**

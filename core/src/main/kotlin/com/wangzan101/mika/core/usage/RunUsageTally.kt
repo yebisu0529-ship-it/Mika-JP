@@ -8,31 +8,36 @@ import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
 /**
- * 1 回の実行で測定されたモデル リクエストの合計数。それを実行し、独自のコルーチン コンテキストに配置します。 [metered] に関連付けられたモデルは、各リクエストの最後に追加されます。
- * したがって、メイン ループ外のすべてのバイパス呼び出し (意図の判断、検証、画像の表示、圧縮など) と失敗した再試行は、この実行名でカウントされます。
- * このコンテキスト (応答を渡した後の終了判定、メモリの検索) に含まれない呼び出しはカウントされず、トークン使用状況ページは引き続き記録されます。メモリ内にのみ追加され、マルチスレッドセーフです。
+ * 1回の実行に含まれる、モデルの論理呼び出しと実際のHTTPリクエストの合計。
+ * アダプター内部の再送はHTTP回数だけに加算する。実行のコルーチン外で行う終了判定や記憶抽出は含めず、
+ * それらも使用量ページには記録する。メモリ内だけで保持し、複数スレッドから安全に加算する。
  */
 class RunUsageTally : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<RunUsageTally>
 
+    private val logicalCalls = AtomicInteger()
     private val calls = AtomicInteger()
     private val unreported = AtomicInteger()
+    private val httpUnreported = AtomicInteger()
     private val input = AtomicLong()
     private val output = AtomicLong()
     private val cached = AtomicLong()
 
-    /** はリクエストを記録します。 [usage] は null で、使用状況が報告されないか、呼び出しが失敗したことを示します。 この時点の */
-    fun add(usage: Usage?) {
-        calls.incrementAndGet()
-        if (usage == null) {
-            unreported.incrementAndGet()
-            return
-        }
+    /** 记一次逻辑调用及其 [httpAttempts] 次实际请求;只有最终成功回复的 [usage] 可记 token。 */
+    fun add(usage: Usage?, httpAttempts: Int) {
+        logicalCalls.incrementAndGet()
+        if (usage == null) unreported.incrementAndGet()
+        val attempts = httpAttempts.coerceAtLeast(0)
+        calls.addAndGet(attempts)
+        httpUnreported.addAndGet((attempts - if (usage == null) 0 else 1).coerceAtLeast(0))
+        if (usage == null) return
         input.addAndGet(usage.inputTokens.toLong())
         output.addAndGet(usage.outputTokens.toLong())
         cached.addAndGet(usage.cachedInputTokens.toLong())
     }
 
     /** の合計が走行記録上1つの[RunEvent.ModelCalls]とみなされます。 */
-    fun event(atMs: Long) = RunEvent.ModelCalls(atMs, calls.get(), unreported.get(), input.get(), output.get(), cached.get())
+    fun event(atMs: Long) = RunEvent.ModelCalls(
+        atMs, logicalCalls.get(), unreported.get(), input.get(), output.get(), cached.get(), calls.get(), httpUnreported.get(),
+    )
 }

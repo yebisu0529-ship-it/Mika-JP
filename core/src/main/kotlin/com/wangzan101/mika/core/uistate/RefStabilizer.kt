@@ -24,10 +24,22 @@ data class ModelSnapshot(
     }
 }
 
+/** 编号解析不出来的原因;[wire] 写进工具结果的 `cause`。 */
+enum class StaleCause(val wire: String) {
+    /** snapshotId 不是这块屏发过的,或太旧已经不记得。 */
+    SnapshotUnknown("snapshot_unknown"),
+    /** 编号是给的那一屏之后才有的:新编号配了旧 snapshotId。 */
+    RefNotInSnapshot("ref_not_in_snapshot"),
+    /** 编号不在最新一屏里:元素没了,或编号写错。 */
+    RefRetired("ref_retired"),
+    /** 编号还在,但从模型看到的那一屏算起元素挪远了。 */
+    ElementMoved("element_moved"),
+}
+
 sealed interface Resolved {
     /** [relocated]: モデルは古い画面の snapshotId を示し、その番号は最新の画面の同じ要素を参照しています。 */
     data class Current(val portRef: String, val portSnapshotId: String, val relocated: Boolean) : Resolved
-    data object Stale : Resolved
+    data class Stale(val cause: StaleCause) : Resolved
 }
 
 /** は、古い数値で許可されている最大中心変位、つまり画面の短辺の比率 (ポート取得の上限と一致) に従います。 */
@@ -88,19 +100,22 @@ class RefStabilizer(private val prefix: String = "s") {
     }
 
     fun resolve(ref: String, snapshotId: String): Resolved {
-        val cur = latest ?: return Resolved.Stale
-        val n = snapshotId.removePrefix(prefix).takeIf { snapshotId.startsWith(prefix) }?.toIntOrNull() ?: return Resolved.Stale
-        if (n < 1 || n > count) return Resolved.Stale
+        val cur = latest ?: return Resolved.Stale(StaleCause.SnapshotUnknown)
+        val n = snapshotId.removePrefix(prefix).takeIf { snapshotId.startsWith(prefix) }?.toIntOrNull()
+            ?: return Resolved.Stale(StaleCause.SnapshotUnknown)
+        if (n < 1 || n > count) return Resolved.Stale(StaleCause.SnapshotUnknown)
+        // 太旧的一屏连当时有哪些编号都没留着:先报 snapshot_unknown,不能把未知/退役编号误报成 ref_retired。
+        if (n != count && n !in centers) return Resolved.Stale(StaleCause.SnapshotUnknown)
         // には画面に表示されているとおりに番号が付けられており、スペルを間違えたモデルの組み合わせを見逃すことはありません。
-        val from = born[ref] ?: return Resolved.Stale
-        if (from > n) return Resolved.Stale
-        val portRef = cur.toPort[ref] ?: return Resolved.Stale
+        val from = born[ref] ?: return Resolved.Stale(StaleCause.RefRetired)
+        if (from > n) return Resolved.Stale(StaleCause.RefNotInSnapshot)
+        val portRef = cur.toPort[ref] ?: return Resolved.Stale(StaleCause.RefRetired)
         if (n != count) {
             // 各画面は遠くに移動したわけではなく、モデルが見た画面から開始して累積的に遠くに移動した可能性があります。
-            val then = centers[n]?.get(ref) ?: return Resolved.Stale
-            val now = centers[count]?.get(ref) ?: return Resolved.Stale
+            val then = centers[n]?.get(ref) ?: return Resolved.Stale(StaleCause.SnapshotUnknown)
+            val now = centers[count]?.get(ref) ?: return Resolved.Stale(StaleCause.SnapshotUnknown)
             val limit = min(cur.port.width, cur.port.height) * STABLE_REF_MAX_SHIFT
-            if (hypot((then.first - now.first).toDouble(), (then.second - now.second).toDouble()) > limit) return Resolved.Stale
+            if (hypot((then.first - now.first).toDouble(), (then.second - now.second).toDouble()) > limit) return Resolved.Stale(StaleCause.ElementMoved)
         }
         return Resolved.Current(portRef, cur.port.snapshotId, relocated = n != count)
     }

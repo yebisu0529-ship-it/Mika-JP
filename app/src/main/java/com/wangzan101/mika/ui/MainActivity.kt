@@ -115,6 +115,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         monitor.refresh()
+        (application as MikaApp).paymentNotifications.refresh()
     }
 
     override fun onStop() {

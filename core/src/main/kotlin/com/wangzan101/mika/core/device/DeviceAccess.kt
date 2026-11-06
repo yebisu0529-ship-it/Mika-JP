@@ -30,6 +30,8 @@ interface DeviceAccessPort {
     suspend fun state(): DeviceState
     suspend fun wake(): Boolean
     suspend fun dismiss(): Boolean
+    /** 安全锁屏还停在通知/指纹页时,尝试一次通用的系统导航来露出凭据页;不识别文字,不输入凭据。 */
+    suspend fun revealCredential(): Boolean = false
     suspend fun credentialReady(kind: CredentialKind): Boolean
     /** 一意に識別できるシステム認証欄を読み取ります。未対応・不明・曖昧な場合は null を返し、フォーカスや入力は行いません。 */
     suspend fun detectedCredentialKind(): CredentialKind? = null
@@ -88,6 +90,7 @@ class DeviceAccess(private val port: DeviceAccessPort, private val store: Device
         credential.use {
             if (!DeviceCredential.valid(it.kind, it.value)) return@withLock result("credential_unavailable", now)
             var targetReady = false
+            var revealed = false
             var waited = 0L
             while (!targetReady && waited < waitMs) {
                 val current = read() ?: return@withLock result("device_unavailable")
@@ -95,6 +98,11 @@ class DeviceAccess(private val port: DeviceAccessPort, private val store: Device
                 if (!store.enabled) return@withLock result("disabled", current)
                 if (!current.helperAvailable) return@withLock result("helper_unavailable", current)
                 targetReady = port.credentialReady(it.kind)
+                // dismiss 后先给系统凭据页一个轮询周期;仍认不出时才做一次导航,避免在已经可用的 PIN 页上多余滑动。
+                if (!targetReady && !revealed && waited >= pollMs) {
+                    revealed = true
+                    port.revealCredential()
+                }
                 if (!targetReady) { delay(pollMs); waited += pollMs }
             }
             if (!targetReady) {

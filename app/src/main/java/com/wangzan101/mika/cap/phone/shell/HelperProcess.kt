@@ -211,7 +211,7 @@ object HelperProcess {
          */
         private fun maybeRestore() {
             val now = System.currentTimeMillis()
-            when (val d = restorePolicy.decide(wish, appBack = appToken != null || retrying, now)) {
+            when (val d = restorePolicy.decide(wish, appBack = appToken != null || retrying, now, forceStopped = forceStopped())) {
                 HelperRestorePolicy.Decision.Restore -> Unit
                 HelperRestorePolicy.Decision.AppBack -> return
                 else -> {
@@ -223,6 +223,15 @@ object HelperProcess {
             if (wish.accessibility) restoreAccessibility()
             retrying = true
             redeliver(0)
+        }
+
+        /** システムの強制停止フラグを確認する。取得できない場合は従来の復帰判断を保つ。 */
+        private fun forceStopped(): Boolean = runCatching {
+            val info = context.packageManager.getApplicationInfo(packageName, 0)
+            info.flags and android.content.pm.ApplicationInfo.FLAG_STOPPED != 0
+        }.getOrElse { t ->
+            Log.w(TAG, "cannot read stopped state of $packageName", t)
+            false
         }
 
         /** ミカのアクセシビリティ サービスをシステム リストに追加し、メイン スイッチをオンにします。他のサービスは変更ありません。失敗した場合は、ログを記録して、通常どおりミカをプルします (立ち上がると自動的に修復されます)。 */

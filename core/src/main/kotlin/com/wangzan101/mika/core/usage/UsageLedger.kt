@@ -39,9 +39,17 @@ data class UsageCounts(
         UsageCounts(input + o.input, output + o.output, cached + o.cached, calls + o.calls, callsWithoutUsage + o.callsWithoutUsage)
 
     companion object {
-        fun of(usage: Usage?): UsageCounts =
-            if (usage == null) UsageCounts(calls = 1, callsWithoutUsage = 1)
-            else UsageCounts(usage.inputTokens.toLong(), usage.outputTokens.toLong(), usage.cachedInputTokens.toLong(), calls = 1)
+        fun of(usage: Usage?, httpAttempts: Int = 1): UsageCounts {
+            val calls = httpAttempts.coerceAtLeast(0).toLong()
+            val withoutUsage = (calls - if (usage == null) 0 else 1).coerceAtLeast(0)
+            return UsageCounts(
+                usage?.inputTokens?.toLong() ?: 0,
+                usage?.outputTokens?.toLong() ?: 0,
+                usage?.cachedInputTokens?.toLong() ?: 0,
+                calls = calls,
+                callsWithoutUsage = withoutUsage,
+            )
+        }
     }
 }
 
@@ -89,10 +97,15 @@ class UsageLedger(
         load()
     }
 
-    override fun record(source: UsageSource, usage: Usage?) {
+    override fun record(source: UsageSource, usage: Usage?) = record(source, usage, httpAttempts = 1)
+
+    override fun record(source: UsageSource, usage: Usage?, httpAttempts: Int) {
+        // 本地组包就失败、从未发请求时,运行记录仍算逻辑调用,但用量账本没有可计的次数或 token。
+        if (httpAttempts <= 0 && usage == null) return
         val cell = Cell(Math.floorDiv(now(), HOUR_MS), UsageKey(source.providerId, source.model, source.purpose))
+        val counts = UsageCounts.of(usage, httpAttempts)
         val queue = synchronized(lock) {
-            cells[cell] = (cells[cell] ?: UsageCounts()) + UsageCounts.of(usage)
+            cells[cell] = (cells[cell] ?: UsageCounts()) + counts
             if (source.providerName.isNotEmpty()) names[source.providerId] = source.providerName
             dirty = true
             !flushQueued.also { flushQueued = true }

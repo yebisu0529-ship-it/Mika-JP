@@ -63,10 +63,12 @@ object BuiltinShellFailures {
         // ペアリング ポートに接続できません: ペアリング ウィンドウが閉じられました (ウィンドウとともにポートが消えます)
         AdbPairingException.Reason.CONNECT_FAILED -> BuiltinShellFailure.PairingWindowClosed
         AdbPairingException.Reason.TLS_FAILED, AdbPairingException.Reason.PROTOCOL -> BuiltinShellFailure.Unknown
+        AdbPairingException.Reason.NOT_LOCAL -> BuiltinShellFailure.NotLocal
     }
 
     fun ofConnection(reason: AdbConnectionException.Reason) = when (reason) {
         AdbConnectionException.Reason.UNAUTHORIZED -> BuiltinShellFailure.AuthorizationRevoked
+        AdbConnectionException.Reason.NOT_LOCAL -> BuiltinShellFailure.NotLocal
         AdbConnectionException.Reason.CONNECT_FAILED,
         AdbConnectionException.Reason.TLS_FAILED,
         AdbConnectionException.Reason.PROTOCOL -> BuiltinShellFailure.ConnectFailed

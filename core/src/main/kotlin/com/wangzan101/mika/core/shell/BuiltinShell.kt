@@ -34,6 +34,8 @@ enum class BuiltinShellFailure(val defaultFix: BuiltinShellFix, val duringPairin
     WifiNotAllowed(BuiltinShellFix.OpenWirelessDebugging, duringPairing = false),
     /** は本機の無線デバッグに接続できません。 */
     ConnectFailed(BuiltinShellFix.Retry, duringPairing = false),
+    /** ADB 目标不是本机自己的地址:调用方错误,不是会自己恢复的网络故障。 */
+    NotLocal(BuiltinShellFix.Retry, duringPairing = false),
     /** ペアの承認が認識されません (長期間使用されなかった場合、またはユーザーがシステムで削除した場合にシステムによって取り消されました)。 */
     AuthorizationRevoked(BuiltinShellFix.RePair, duringPairing = false),
     /** ペアリングに使用されたキーは保存されていますが、読み取ることができません。デバイスはそのキーのみを認識し、静かに変更することはできません。再度ペアリングする必要があります（ペアリング時には新しいキーが必要です）。 */

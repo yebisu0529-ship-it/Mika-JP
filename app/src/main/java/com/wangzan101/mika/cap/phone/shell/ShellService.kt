@@ -7,6 +7,7 @@ import android.content.ClipData
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.media.AudioManager
@@ -41,6 +42,7 @@ import com.wangzan101.mika.core.uistate.PressKeys
 import java.io.File
 import java.io.ByteArrayOutputStream
 import java.lang.reflect.Method
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -62,6 +64,7 @@ class ShellService(
     private val context: Context = ShellContext.create()
     private val displays = HashMap<Int, VirtualDisplay>()
     private var orientationWatch: DisplayOrientationWatch? = null
+    private val requestedOrientations = ConcurrentHashMap<Int, Int>()
     /** ミュートされたパッケージ → ミュート前の PLAY_AUDIO モード (「デフォルト」は元々設定されていないことを意味します)、[stateDir] に該当すると、プロセスは強制終了され、次回の起動時に再開されます。 */
     private val muted = AudioMuteLedger(File(stateDir, "mika_audio_mute_$allowedUid"))
     /** ミカがいるユーザー: オリジナルのアプリはここにインストールされています。他のユーザーは別のコピー（利用可能なアバター、作品情報）を持っています。 */
@@ -167,6 +170,7 @@ class ShellService(
             displays.remove(displayId) to (if (displays.isEmpty()) orientationWatch.also { orientationWatch = null } else null)
         }
         watch?.close()
+        if (watch != null) requestedOrientations.clear()
         vd?.release()
     }
 
@@ -178,7 +182,13 @@ class ShellService(
     private fun ensureOrientationWatch() {
         if (Build.VERSION.SDK_INT < 34 || synchronized(displays) { orientationWatch != null }) return
         val watch = runCatching {
-            DisplayOrientationWatch(taskManager, active = { synchronized(displays) { displays.isNotEmpty() } }, sync = ::syncDisplayOrientations)
+            DisplayOrientationWatch(
+                taskManager,
+                active = { synchronized(displays) { displays.isNotEmpty() } },
+                onRequestedOrientation = { taskId, orientation -> requestedOrientations[taskId] = orientation },
+                onTaskRemoved = { taskId -> requestedOrientations.remove(taskId) },
+                sync = ::syncDisplayOrientations,
+            )
         }.onFailure { Log.w(TAG, "display orientation watcher unavailable", it) }.getOrNull() ?: return
         val spare = synchronized(displays) {
             if (orientationWatch == null && displays.isNotEmpty()) { orientationWatch = watch; null } else watch
@@ -197,6 +207,7 @@ class ShellService(
         val top = allTasks().groupBy { TASK_INFO.getField("displayId").getInt(it) }
         for ((id, vd) in ours) runCatching {
             val task = top[id]?.firstOrNull() ?: return@runCatching
+            val taskId = TASK_INFO.getField("taskId").getInt(task)
             val compat = runCatching { TASK_INFO.getField("appCompatTaskInfo").get(task) }.getOrNull() ?: task
             val cls = compat.javaClass
             // Android 14 ではアプリケーション ウィンドウの幅と高さのみが指定され、15 以降では明確なレターボックス ロゴが表示されます。
@@ -205,7 +216,10 @@ class ShellService(
             val height = runCatching { cls.getField("topActivityLetterboxHeight").getInt(compat) }.getOrDefault(0)
             val display = vd.display
             val mode = display.mode
-            val rotation = DisplayOrientation.rotation(mode.physicalWidth, mode.physicalHeight, display.rotation, width, height) ?: return@runCatching
+            val rotation = DisplayOrientation.rotation(
+                mode.physicalWidth, mode.physicalHeight, display.rotation, width, height,
+                requestedOrientations[taskId] ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+            ) ?: return@runCatching
             // この画面はスナップショット後に削除された可能性があります。
             if (!ownDisplay(id)) return@runCatching
             val ok = runCatching {
@@ -1386,6 +1400,7 @@ class ShellService(
 
     override fun wakeDevice(): Boolean = deviceUnlock.wake()
     override fun dismissDeviceKeyguard(): Boolean = deviceUnlock.dismiss()
+    override fun revealDeviceCredential(): Boolean = deviceUnlock.reveal()
     override fun enterDeviceCredential(kind: Int, credential: ByteArray): Boolean = deviceUnlock.enter(kind, credential)
 
     private fun commandResult(code: Int, output: String) = Bundle().apply { putInt("exitCode", code); putString("output", output) }

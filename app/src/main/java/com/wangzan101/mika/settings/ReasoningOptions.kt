@@ -14,8 +14,13 @@ data class ReasoningOptions(val levels: List<String>, val fromProvider: Boolean)
         private val manualLevels = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
 
         fun of(config: ProviderConfig, listed: ListedModel?): ReasoningOptions? {
-            listed?.reasoningEfforts?.let { return ReasoningOptions(it, fromProvider = true) }
-            // は依然として空のオプションを返すため、古い保存されたギアをインターフェイスでデフォルトに復元できます。
+            listed?.reasoningEfforts?.let { declared ->
+                // ChatGPTのモデル一覧に、サービスが受け付けないultraが含まれたことがある。
+                // この接続ではリクエスト側が認識する値だけを表示し、HTTP 400を防ぐ。
+                val levels = if (config.kind == ProviderConfig.Kind.ChatGpt) declared.filter(manualLevels::contains) else declared
+                return ReasoningOptions(levels, fromProvider = true)
+            }
+            // 空の選択肢を返し、保存済みの無効な値を既定へ戻せるようにする。
             if (listed?.reasoning == false) return ReasoningOptions(emptyList(), fromProvider = true)
             return when (ProviderStore.adapterFor(config, listed?.endpoint).first) {
                 ProviderConfig.Kind.OpenAiResponses, ProviderConfig.Kind.ChatGpt, ProviderConfig.Kind.Xai ->

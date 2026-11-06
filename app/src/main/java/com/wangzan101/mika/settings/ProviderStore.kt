@@ -159,12 +159,18 @@ data class Provider(
         kind != ProviderConfig.Kind.ChatGpt && kind != ProviderConfig.Kind.Xai && models?.isEmpty() == true && model !in verifiedModels
 }
 
-/** 空白のままにしたウィンドウは、選択したモデル構成を継承し、空白のままにしたトリガー ポイントはコアによって自動的に計算されます。 */
-data class ModelContextSettings(val windowTokens: Int? = null, val triggerTokens: Int? = null) {
+/** 未指定のウィンドウはモデルの値、圧縮開始点は自動計算、読み取りタイムアウトは共通の120秒を使う。 */
+data class ModelContextSettings(val windowTokens: Int? = null, val triggerTokens: Int? = null, val readTimeoutSeconds: Int? = null) {
     fun limits(modelWindow: Int): ContextLimits = ContextLimits.of(windowTokens ?: modelWindow, triggerTokens)
 
     fun validFor(modelWindow: Int): Boolean = (windowTokens == null || windowTokens > 0) &&
-        (triggerTokens == null || (triggerTokens > 0 && triggerTokens == limits(modelWindow).trigger))
+        (triggerTokens == null || (triggerTokens > 0 && triggerTokens == limits(modelWindow).trigger)) &&
+        (readTimeoutSeconds == null || readTimeoutSeconds in 1..MAX_READ_TIMEOUT_SECONDS)
+
+    companion object {
+        // OkHttp は読み取りタイムアウトを Int のミリ秒で保持する。
+        const val MAX_READ_TIMEOUT_SECONDS = Int.MAX_VALUE / 1000
+    }
 }
 
 /** 目的に応じて何を選ぶか：特定のモデルを使用するか、メインモデルを使用するか、または使用しない（写真を見なければ使用できません）。 */
@@ -198,6 +204,12 @@ data class RoleChoices(
         is RoleChoice.Model -> c.configId
         RoleChoice.SameAsMain -> main
         RoleChoice.Off, null -> null
+    }
+
+    /** 接続と実際の推論強度が同じ場合だけ、不要な役割の振り分けを省く。 */
+    fun sameModel(first: ModelRole, second: ModelRole): Boolean {
+        val a = resolve(first) ?: return false
+        return a == resolve(second) && reasoningEffort(first) == reasoningEffort(second)
     }
 
     /** には使用中の構成 ID があります。残りの構成は使用されていないため、削除されます。 */
@@ -234,12 +246,14 @@ data class RoleChoices(
  * モデルクライアントを作るときに追加で渡すもの: [headers] はすべてのリクエストに付ける（クライアント識別、セッション番号。[ClientHeaders] 参照）;
  * [maxOutputTokens] は返信の長さを制限する（接続テスト用）、null ならアダプタの既定; [reasoningEffort] はこの用途で選んだ推論の強さ;
  * [thinkingTypes] はモデル一覧が明記した、そのモデルが受け付ける思考方式（[ListedModel.thinkingTypes] 参照）、記載がなければ null。
+ * [readTimeoutSeconds] はモデル別の読み取りタイムアウト。未指定なら共通の120秒を使う。
  */
 data class ClientSetup(
     val headers: Map<String, String> = emptyMap(),
     val maxOutputTokens: Int? = null,
     val reasoningEffort: String? = null,
     val thinkingTypes: List<String>? = null,
+    val readTimeoutSeconds: Int? = null,
 )
 
 /** 「テストして保存」テスト呼び出し ([ProviderStore.probe] を参照) の結果。 */
@@ -381,6 +395,7 @@ class ProviderStore(
             explicitSelfHosted = found.explicitSelfHosted || explicitSelfHosted,
         )
         _providers.value = _providers.value.map { if (it.id == p.id) p else it }
+        repairUnavailableReasoningEfforts()
         if (apiKey != null) setKey(p.id, apiKey)
         writeConfig()
         return p
@@ -393,6 +408,7 @@ class ProviderStore(
         _providers.value = _providers.value.map {
             if (it.id == providerId) it.copy(models = models, savedUntested = false) else it
         }
+        repairUnavailableReasoningEfforts()
         writeConfig()
     }
 
@@ -563,7 +579,7 @@ class ProviderStore(
         ))
         modelFactory(configured, apiKey(cfg.id), listed?.endpoint, ClientSetup(
             headers(p?.sessionHeader, session), reasoningEffort = _roles.value.reasoningEffort(role),
-            thinkingTypes = listed?.thinkingTypes,
+            thinkingTypes = listed?.thinkingTypes, readTimeoutSeconds = settings?.readTimeoutSeconds,
         )).metered(source, usage)
     }
 
@@ -775,6 +791,8 @@ class ProviderStore(
      * は同じ 4 つのプロトコルを要求します。返信の上限 ([ClientSetup.maxOutputTokens]) は、メッセージ (必須) とgenerateContent のみに適用されます。
      * チャット完了は表示されません (一部のモデルは `max_tokens` のみを認識し、一部のモデルは `max_completion_tokens` のみを認識します。エラーが表示された場合、リクエスト全体が拒否されます。
      * は接続テスト中に誤検知を返します)、応答は返されません (`max_output_tokens` は ChatGPT パッケージでは受け入れられません)。
+     * [ClientSetup.readTimeoutSeconds] の指定時は接続プールとプロキシを共有するクライアントを派生させる。
+     * 未指定なら共通の120秒を使い、他のモデルの設定には影響しない。
      */
     private fun buildModel(cfg: ProviderConfig, apiKey: String?, endpoint: ModelEndpoint?, setup: ClientSetup): ChatModel {
         val (kind, adapterBase) = adapterFor(cfg, endpoint)
@@ -782,6 +800,11 @@ class ProviderStore(
         val baseUrl = if (cfg.kind == ProviderConfig.Kind.Xai) {
             provider(cfg.providerId)?.baseUrl?.takeIf { it.isNotBlank() } ?: adapterBase
         } else adapterBase
+        val defaultHttp = http
+        val http = setup.readTimeoutSeconds
+            ?.takeIf { it in 1..ModelContextSettings.MAX_READ_TIMEOUT_SECONDS }
+            ?.let { seconds -> defaultHttp.newBuilder().readTimeout(seconds.toLong(), TimeUnit.SECONDS).build() }
+            ?: defaultHttp
         return when (kind) {
             ProviderConfig.Kind.OpenAiCompat ->
                 OpenAiCompatModel(baseUrl, apiKey, cfg.model, cfg.capabilities, http, endpoint?.reasoningField, setup.headers,
@@ -839,6 +862,7 @@ class ProviderStore(
         migrate()
         // 存在しない構成を指す選択はデフォルトに戻り、誰も使用していない構成は削除されます。ファイル内の内容と異なる場合にのみ書き戻されます (新しい移行の目的を含む)。
         _roles.value = _roles.value.keepOnly(_configs.value.map { it.id }.toSet())
+        repairUnavailableReasoningEfforts()
         prune()
         if (configFile.isFile) {
             val text = configJson()
@@ -893,6 +917,20 @@ class ProviderStore(
         }
     }
 
+    /**
+     * 模型目录或客户端认识的档位变化后,旧选择不能继续原样发给服务端:能确定当前选项时,失效项退回默认;
+     * 没有档位元数据、协议本就不提供这项设置的旧配置不动,避免把仍可由服务端处理的值误删。
+     */
+    private fun repairUnavailableReasoningEfforts() {
+        val repaired = _roles.value.reasoningEfforts.mapNotNull { (role, effort) ->
+            val cfg = configFor(role) ?: return@mapNotNull null
+            val listed = provider(cfg.providerId)?.models?.firstOrNull { it.id == cfg.model }
+            val options = ReasoningOptions.of(cfg, listed)
+            if (options == null || effort in options.levels) role to effort else null
+        }.toMap()
+        _roles.value = _roles.value.copy(reasoningEfforts = repaired)
+    }
+
     private fun providerOf(o: JsonObject) = Provider(
         id = o.str("id"),
         name = o.str("name"),
@@ -904,7 +942,8 @@ class ProviderStore(
         verifiedModels = o["verifiedModels"]?.jsonArray?.map { it.jsonPrimitive.content }?.toSet().orEmpty(),
         contextSettings = (o["contextSettings"] as? JsonObject).orEmpty().mapNotNull { (model, raw) ->
             val entry = raw as? JsonObject ?: return@mapNotNull null
-            val settings = ModelContextSettings(entry.positiveInt("windowTokens"), entry.positiveInt("triggerTokens"))
+            val settings = ModelContextSettings(entry.positiveInt("windowTokens"), entry.positiveInt("triggerTokens"),
+                entry.positiveInt("readTimeoutSeconds"))
             if (settings == ModelContextSettings()) null else model to settings
         }.toMap(),
         visionOverrides = (o["visionOverrides"] as? JsonObject).orEmpty().mapNotNull { (model, raw) ->
@@ -994,6 +1033,7 @@ class ProviderStore(
                             for ((model, settings) in p.contextSettings) putJsonObject(model) {
                                 settings.windowTokens?.let { put("windowTokens", it) }
                                 settings.triggerTokens?.let { put("triggerTokens", it) }
+                                settings.readTimeoutSeconds?.let { put("readTimeoutSeconds", it) }
                             }
                         }
                         if (p.visionOverrides.isNotEmpty()) putJsonObject("visionOverrides") {

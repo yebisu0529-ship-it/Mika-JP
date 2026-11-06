@@ -72,6 +72,8 @@ class HelperRestorePolicy(
         Restore,
         /** ミカはそれを望んでいません (カプセルは常に表示されるわけではなく、実行中のタスクもありません)。 */
         NotWanted,
+        /** システム設定で明示的に強制停止された場合は、自動復帰しない。 */
+        ForceStopped,
         /** しばらく待っていると、ミカ本人が戻ってきた（というか引き継ぎ中）。 */
         AppBack,
         /** 最近引っ張りすぎです：ミカは引き上げるとすぐに死んでしまい、もう引っ張りません。 */
@@ -83,8 +85,9 @@ class HelperRestorePolicy(
     private var gaveUpAt = 0L
 
     @Synchronized
-    fun decide(wish: RestoreWish, appBack: Boolean, now: Long): Decision {
+    fun decide(wish: RestoreWish, appBack: Boolean, now: Long, forceStopped: Boolean = false): Decision {
         if (appBack) return Decision.AppBack
+        if (forceStopped) return Decision.ForceStopped
         if (!wish.revive) return Decision.NotWanted
         prune(now)
         if (attempts.size >= maxAttempts) {

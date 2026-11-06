@@ -223,6 +223,7 @@ fun ChatScreen(
 
     // チャットに戻ったときに、同じコンテンツは再スクロールされません。新しい進行状況は、最後に続く場合にのみスクロールされます。
     val last = ui.exchanges.lastOrNull()
+    val rowCount = chatItemCount(ui.exchanges, kept, phoneSetupNeeded, hasBlocked = ui.blocked != null)
     val scrollMarker = "${ui.conversationId}:${ui.exchanges.size}:${last?.steps?.size}:${last?.steers?.size}:${last?.status?.hashCode()}:${ui.blocked?.hashCode()}"
     LaunchedEffect(scrollMarker) {
         if (previousScrollMarker == scrollMarker) return@LaunchedEffect
@@ -232,10 +233,9 @@ fun ChatScreen(
         previousConversation = ui.conversationId
         if (changedConversation) followingTail = true
         if (!firstEntry && !changedConversation && !followingTail) return@LaunchedEffect
-        val count = listState.layoutInfo.totalItemsCount
-        if (count > 0) {
-            if (firstEntry || changedConversation || reduceMotion) listState.scrollToItem(count - 1)
-            else listState.animateScrollToItem(count - 1)
+        if (rowCount > 0) {
+            if (firstEntry || changedConversation || reduceMotion) listState.scrollToItem(rowCount - 1)
+            else listState.animateScrollToItem(rowCount - 1)
         }
     }
     // ストリーミングテキストが増加すると下に進みます。ユーザーが積極的に上方向にスクロールしているときに後退しないでください。
@@ -391,6 +391,7 @@ fun ChatScreen(
                 Toast.makeText(context, context.getString(R.string.pip_closed_hint), Toast.LENGTH_SHORT).show()
             },
             onReopen = vm::reopenPip,
+            onUnmute = vm::unmutePip,
             // が処理したい場合は、小さなウィンドウをクリックして、それを片付け、処理したいカードまでスクロールします（最後の質問と回答では、ファイルカードとその後に設定する行しかない場合があります）
             onAttention = {
                 vm.attendPip()
@@ -570,7 +571,7 @@ internal fun withdrawableSteer(exchanges: List<Exchange>, key: String): SteerNot
     if (ex.status.isActive()) ex.steers.firstOrNull { key == "m$i-${it.id}" && it.state.unconsumed && !it.remote } else null
 }.firstOrNull()
 
-private fun ExchangeStatus.isActive() =
+internal fun ExchangeStatus.isActive() =
     this !is ExchangeStatus.Done && this !is ExchangeStatus.Failed && this !is ExchangeStatus.Cancelled
 
 /**

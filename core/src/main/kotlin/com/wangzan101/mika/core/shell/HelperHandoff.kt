@@ -83,6 +83,7 @@ object HelperHandoff {
      * (サブシェルの終了後、init によって管理されます)、標準出力とエラーは失われ、adb ストリームに接続されなくなります。スクリプトは、setsid が有効になるまでしばらく待機します。
      * アシスタント プロセスがまだある場合は、「開始中」と言ってください。そこにない場合は (パスワードの有効期限が切れているか、Mika がパスワードを認識しないことが主な理由です)、Mika を開いて再度実行するようにユーザーに依頼します。
      * Android 標準の sh と toybox にあるコマンドだけを使う。shell の身分でなければ（adb 経由で実行されていなければ）起動しない: Mika は shell から引き渡されたヘルパーだけを受け取る。
+     * 端末によっては抜線後に停止する。その場合はケーブルをつなぎ直し、同じコマンドを実行する。
      */
     fun usbScript(apkPath: String, packageName: String, appUid: Int, certPin: String, nonce: String, scriptPath: String): String {
         val name = quote(processName(packageName))
@@ -103,7 +104,7 @@ object HelperHandoff {
             |sleep 2
             |if pidof $name >/dev/null 2>&1; then
             |  echo "Mikaの操作アシスタントを起動しています。Mikaを開き、スマートフォン操作が利用できるか確認してください。"
-            |  echo "ケーブルを抜いても動作を続けます。端末を再起動した場合は、このコマンドを再実行してください。"
+            |  echo "多くの端末ではケーブルを抜いても動作を続けます。再起動後や抜線後に操作できなくなった場合は、ケーブルをつないでこのコマンドを再実行してください。"
             |else
             |  echo "Mikaの操作アシスタントを起動できませんでした。Mikaを一度開いてから、このコマンドを再実行してください。"
             |  exit 1

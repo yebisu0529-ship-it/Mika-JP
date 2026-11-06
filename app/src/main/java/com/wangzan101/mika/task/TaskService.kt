@@ -331,6 +331,8 @@ class TaskService : Service() {
             } catch (e: RemoteException) {
                 run.shellDied = true
                 TaskState.Failed(SHELL_DIED, FailKind.Environment)
+            } catch (e: UnattendedLockException) {
+                TaskState.Failed(e.message, FailKind.Environment)
             } catch (e: com.wangzan101.mika.core.access.AppAccessDenied) {
                 val reason = when (e.code) {
                     "app_blocked" -> tr(R.string.task_app_blocked, e.packageName ?: tr(R.string.task_app_this_app))

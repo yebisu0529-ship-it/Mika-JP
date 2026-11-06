@@ -221,6 +221,18 @@ class HelperHandoffTest {
     }
 
     @Test
+    fun usbScriptDoesNotPromiseThatTheHelperSurvivesUnplugging() {
+        val script = HelperHandoff.usbScript(apk, "com.wangzan101.mika", 10234, "pin", "f00d", scriptPath)
+        assertTrue(script.contains("多くの端末ではケーブルを抜いても動作を続けます"))
+        assertTrue(script.contains("再起動後や抜線後に操作できなくなった場合"))
+        assertTrue(script.contains("ケーブルをつないでこのコマンドを再実行"))
+        assertFalse(script.contains("ケーブルを抜いても必ず"))
+        // 新提示不换启动机制,口令仍只出现一次
+        assertTrue(script.contains("nohup setsid app_process"))
+        assertEquals(1, script.split("f00d").size - 1)
+    }
+
+    @Test
     fun usbScriptQuotesEverythingItInterpolates() {
         val script = HelperHandoff.usbScript("/a b/it's.apk", "p", 1, "pin", "n'; rm -rf /; '", scriptPath)
         assertTrue(script.contains("CLASSPATH='/a b/it'\\''s.apk'"))

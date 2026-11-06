@@ -88,6 +88,9 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
 
     val remoteTasks by lazy { RemoteTaskHub(this) }
 
+    /** 本人が許可したメイン画面の起動・ロック解除。PC接続と定時タスクで同じ処理を共有する。 */
+    val deviceAccess by lazy { com.wangzan101.mika.device.AndroidDeviceAccess(this) { phone.hub.shell.value } }
+
     /**
      * コンピューター接続 (MCP): スイッチ、アクセス トークン (サービス プロバイダーのキーと同様に暗号化および保存)、モニタリング。 LAN タイプはデフォルトではオフになっています。
      * USB は、今度はシャットダウンされるまで、adb 経由でコンピューターによって開かれます (ブート番号は、シェルで読み取られた `settings get global boot_count` と同じです)。
@@ -99,7 +102,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
             com.wangzan101.mika.settings.McpUsbSettings(settingsDir,
                 bootId = { android.provider.Settings.Global.getString(contentResolver, android.provider.Settings.Global.BOOT_COUNT) ?: "null" },
                 infoFile = { getExternalFilesDir(null)?.let { java.io.File(it, com.wangzan101.mika.core.mcp.McpUsb.INFO_FILE) } }),
-            remoteTasks, com.wangzan101.mika.device.AndroidDeviceAccess(this) { phone.hub.shell.value },
+            remoteTasks, deviceAccess,
             com.wangzan101.mika.settings.RelaySettings(settingsDir, com.wangzan101.mika.settings.KeystoreKeyCipher("mika-remote-relay")))
     }
     val childRuns by lazy { FileChildRunStore(java.io.File(filesDir, "children-v3.json")) }
@@ -242,6 +245,19 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
     /** 他のアプリの上に浮かぶ浮遊カプセル。 */
     val capsule: CapsuleController by lazy { CapsuleController(this, taskState, foreground, resources.takeoverQueue) }
 
+    val paymentPause by lazy {
+        com.wangzan101.mika.core.shell.PaymentPauseController(
+            phone.recoverySettings,
+            shouldRestoreAccessibility = {
+                phone.recovery.accessibility.value.enabled ||
+                    phone.recoverySettings.consent.value.wants(com.wangzan101.mika.core.shell.RecoveryCapability.Accessibility)
+            },
+            disableAccessibility = { phone.recovery.setAccessibilityForPayment(false) },
+            enableAccessibility = { phone.recovery.setAccessibilityForPayment(true) },
+        )
+    }
+    val paymentNotifications by lazy { com.wangzan101.mika.payment.PaymentPauseNotifications(this) }
+
     /** ダイアログ ページのステータスはプロセスに従います。インターフェイスが閉じられてから開かれた後も、実行中のタスクのステップはそのまま残ります。 */
     val chat: ChatViewModel by lazy {
         val app = this
@@ -275,6 +291,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
                 override fun answerIn(conversationId: String, text: String) { key(conversationId)?.let { TaskService.answer(app, text, it) } }
                 override fun approveIn(conversationId: String, key: Int) { key(conversationId)?.let { TaskService.approve(app, key, it) } }
                 override fun declineIn(conversationId: String, key: Int) { key(conversationId)?.let { TaskService.decline(app, key, it) } }
+                override fun unmuteIn(conversationId: String) { taskState.run(conversationId)?.unmute() }
             },
             conversations,
             taskState.busy,
@@ -343,6 +360,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
         com.wangzan101.mika.cap.phone.setup.RestoreWishSync(
             phone.hub, FeatureFlags.get(this).capsuleModeChanges(), taskState.busy, phone.recoverySettings.consent, phone.recovery.accessibility,
         ).start()
+        paymentNotifications.start()
         // 前回の異常終了（アプリがミュート）時に残された変更がここに復元されます。
         scope.launch { taskRecovery.recover() }
         // 最後のプロセスが強制終了されたときに操作は終了しませんでした。現在中断としてマークして通知し、タスクが処理されるのを待ちます。

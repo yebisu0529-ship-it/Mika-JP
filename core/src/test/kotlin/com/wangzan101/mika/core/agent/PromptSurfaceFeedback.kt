@@ -93,6 +93,7 @@ internal object PromptSurfaceFeedback {
             "blank no window" to ScreenCheck(ScreenState.BLANK, null, false, cause = ScreenDiagnosis.NO_WINDOW),
             "loading" to ScreenCheck(ScreenState.LOADING, "com.x", false),
             "protected" to ScreenCheck(ScreenState.PROTECTED, "com.x", false),
+            "capture unavailable" to ScreenCheck(ScreenState.CAPTURE_UNAVAILABLE, "com.x", true, takeoverReason = ScreenDiagnosis.DISPLAY_CAPTURE),
             "needs human" to ScreenCheck(ScreenState.NEEDS_HUMAN, "com.x", true, takeoverReason = "login"),
             "unsupported browser" to ScreenCheck(ScreenState.NORMAL, "com.x", false, takeoverReason = ScreenDiagnosis.UNSUPPORTED_BROWSER),
         )) add("phone_diagnose $label", toolDispatcher(Checked(c)), "phone_diagnose")

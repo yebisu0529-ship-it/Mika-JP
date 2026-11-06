@@ -76,4 +76,5 @@
     <string name="screens_waiting">待機中</string>
     <string name="screens_needs_you">あなたの対応が必要</string>
     <string name="screens_zoom">この画面を拡大</string>
+    <string name="task_a11y_not_running">Mikaのユーザー補助は有効ですが、Androidがまだサービスに接続していません。システムの「ユーザー補助」でMikaを一度オフにしてから、もう一度オンにしてください。Androidに制限される場合は、先にMikaのアプリ情報で「制限された設定を許可」を確認してください。</string>
 </resources>
