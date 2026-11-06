@@ -51,6 +51,10 @@ object StatusCopy {
             address?.takeIf { it.isNotBlank() }?.let { tr(R.string.payment_address, it) },
         ).joinToString("\n").ifEmpty { null }
 
+    /** 任务开工时仍连不上无障碍:已启用和未启用是两种处理,不能都说成没开。 */
+    fun accessibilityUnavailable(enabled: Boolean): String =
+        tr(if (enabled) R.string.task_a11y_not_running else R.string.task_no_a11y)
+
     fun accessibilityValue(s: AccessibilityState): Pair<String, ValueTone> = when (s) {
         AccessibilityState.On -> tr(R.string.state_on) to ValueTone.Ok
         AccessibilityState.Off -> tr(R.string.state_off) to ValueTone.Bad
@@ -144,10 +148,14 @@ object StatusCopy {
         }
         is Problem.Accessibility -> when (p.state) {
             AccessibilityState.Off -> BannerCopy(tr(R.string.banner_a11y_off), tr(R.string.banner_a11y_off_detail), tr(R.string.turn_on_go))
-            // 古いサービスは、起動後にロック解除されるまでバインドできません。ロック解除後に自動的に復元され、ユーザーはサービスをオフにして再度オンにすることはできません。
-            AccessibilityState.EnabledNotRunning ->
-                if (p.userLocked) BannerCopy(tr(R.string.banner_a11y_locked), tr(R.string.banner_a11y_locked_detail), tr(R.string.view))
-                else BannerCopy(tr(R.string.banner_a11y_not_running), tr(R.string.banner_a11y_not_running_detail), tr(R.string.fix_it))
+            // 开机后还没解锁过时服务本来就绑不上:解锁后会自己恢复,不让用户去关掉再打开
+            AccessibilityState.EnabledNotRunning -> when {
+                p.userLocked -> BannerCopy(tr(R.string.banner_a11y_locked), tr(R.string.banner_a11y_locked_detail), tr(R.string.view))
+                p.restrictedSettings -> BannerCopy(
+                    tr(R.string.banner_a11y_not_running), tr(R.string.banner_a11y_restricted_detail), tr(R.string.fix_it),
+                )
+                else -> BannerCopy(tr(R.string.banner_a11y_not_running), tr(R.string.banner_a11y_not_running_detail), tr(R.string.fix_it))
+            }
             AccessibilityState.On -> error("not a problem")
         }
         Problem.NoModel -> BannerCopy(tr(R.string.banner_no_model), tr(R.string.banner_no_model_detail), tr(R.string.add))
@@ -171,11 +179,19 @@ object StatusCopy {
                 tr(R.string.explain_a11y_off_body),
                 tr(R.string.chat_go_settings), Fix.OpenAccessibility,
             )
-            AccessibilityState.EnabledNotRunning -> Explanation(
-                tr(R.string.banner_a11y_not_running),
-                tr(R.string.explain_a11y_not_running_body),
-                tr(R.string.chat_go_settings), Fix.OpenAccessibility,
-            )
+            AccessibilityState.EnabledNotRunning -> when {
+                p.userLocked -> Explanation(
+                    tr(R.string.banner_a11y_locked), tr(R.string.banner_a11y_locked_detail), null, null,
+                )
+                p.restrictedSettings -> Explanation(
+                    tr(R.string.banner_a11y_not_running), tr(R.string.explain_a11y_restricted_body),
+                    PhoneSetupCopy.APP_INFO, Fix.OpenAppInfo,
+                )
+                else -> Explanation(
+                    tr(R.string.banner_a11y_not_running), tr(R.string.explain_a11y_not_running_body),
+                    tr(R.string.chat_go_settings), Fix.OpenAccessibility,
+                )
+            }
             AccessibilityState.On -> error("not a problem")
         }
         Problem.NoModel -> Explanation(

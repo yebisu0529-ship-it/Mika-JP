@@ -79,6 +79,7 @@ class ChatViewModelTest {
         override fun resumeIn(conversationId: String) { calls += "resume@$conversationId" }
         override fun answerIn(conversationId: String, text: String) { calls += "answer@$conversationId:$text" }
         override fun approveIn(conversationId: String, key: Int) { calls += "approve@$conversationId:$key" }
+        override fun unmuteIn(conversationId: String) { calls += "unmute@$conversationId" }
     }
 
     private val ready = SystemStatus(34, BuiltinShellStatus.Running, AccessibilityState.On, notificationsAllowed = true)
@@ -1926,7 +1927,19 @@ class ChatViewModelTest {
         assertFalse("小さなボタンを押すと再表示する", vm.ui.value.pip.closed)
     }
 
-    /** は、小さな画面が閉じているときに引き継ぐように求めます。画面は自動的にポップアップしませんが、小さなボタンは「処理する必要があります」となり、要求された内容はダイアログ カード内に表示されます。 */
+    @Test fun pipUnmuteIsOneShotAndRepeatedClicksDoNotInventToggleState() = runTest {
+        val vm = vm()
+        vm.send("打开视频", ok)
+        val id = vm.ui.value.conversationId!!
+        calls.clear()
+        val before = vm.ui.value.pip
+        vm.unmutePip()
+        vm.unmutePip()
+        assertEquals(listOf("unmute@$id", "unmute@$id"), calls)
+        assertEquals(before, vm.ui.value.pip)
+    }
+
+    /** 关着小画面时要你接管:不自己弹开,但小按钮进入「要你处理」的样子,要你做的事照样在对话卡片里。 */
     @Test fun closedSmallWindowStillSignalsWhenItNeedsYou() = runTest {
         val open = MutableStateFlow(false)
         val vm = vmWithScreen(open)

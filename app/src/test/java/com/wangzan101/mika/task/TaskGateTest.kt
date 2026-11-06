@@ -10,6 +10,7 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -50,6 +51,28 @@ class TaskGateTest {
         assertEquals(listOf<TaskState?>(null), reported)
     }
 
+    @Test fun paymentPauseAlsoBlocksTheUnattendedUnlockAddedUpstream() = runTest {
+        val paused = MutableStateFlow<PaymentPauseRecord?>(PaymentPauseRecord(true))
+        var unlocks = 0
+        var passed = false
+        var systemLocked = true
+        val paymentGate = TaskGate(locked, shellUp, paused,
+            refreshLocked = { locked.value = systemLocked },
+            unattendedUnlock = { unlocks++; systemLocked = false; locked.value = false }) { true }
+        launch { paymentGate.pass { reported += it }; passed = true }
+        runCurrent()
+        paymentGate.resume()
+        runCurrent()
+        assertFalse(passed)
+        assertEquals(0, unlocks)
+        assertEquals("payment_paused", (reported.last() as TaskState.Held).reason.code)
+        // 明示的な再開の後にだけ、ロック解除の既存処理へ進める。
+        paused.value = null
+        runCurrent()
+        assertTrue(passed)
+        assertEquals(1, unlocks)
+    }
+
     @Test
     fun nonInteractiveWaitsForUnlockThenResumesByItself() = runTest {
         locked.value = LockState.Reading(interactive = false, keyguardLocked = false).locked
@@ -66,6 +89,61 @@ class TaskGateTest {
         runCurrent()
         assertTrue(passed)
         assertEquals(null, reported.last())
+    }
+
+    @Test
+    fun gateRefreshesSystemLockStateBeforeAllowingWrite() = runTest {
+        var systemLocked = true
+        var unlocks = 0
+        val refreshed = TaskGate(locked, shellUp,
+            refreshLocked = { locked.value = systemLocked }, // 熄屏已发生，广播对应的状态流还没更新
+            unattendedUnlock = {
+                unlocks++
+                systemLocked = false
+                locked.value = false
+            }) { true }
+
+        refreshed.pass { reported += it }
+
+        assertEquals(1, unlocks)
+        assertEquals(listOf<TaskState?>(TaskState.Held(TaskGate.LOCKED), null), reported)
+    }
+
+    @Test
+    fun unattendedTaskUnlocksThenContinues() = runTest {
+        locked.value = true
+        var unlocks = 0
+        val unattended = TaskGate(locked, shellUp, unattendedUnlock = {
+            unlocks++
+            locked.value = false
+        }) { true }
+
+        unattended.pass { reported += it }
+
+        assertEquals(1, unlocks)
+        assertEquals(listOf<TaskState?>(TaskState.Held(TaskGate.LOCKED), null), reported)
+    }
+
+    @Test
+    fun unattendedTaskFailsWhenUnlockIsUnavailable() = runTest {
+        locked.value = true
+        val unattended = TaskGate(locked, shellUp, unattendedUnlock = { }) { true }
+
+        val result = withTimeoutOrNull(1_000) { runCatching { unattended.pass { reported += it } } }
+
+        assertTrue(result?.exceptionOrNull() is UnattendedLockException)
+        assertEquals(TaskState.Held(TaskGate.LOCKED), reported.last())
+    }
+
+    @Test
+    fun unattendedTaskTrustsRefreshedSystemStateOverAttemptOutcome() = runTest {
+        locked.value = true
+        // 流程因权限等原因返回时，用户可能刚好已经手动解锁；实际系统状态才是依据。
+        val unattended = TaskGate(locked, shellUp, unattendedUnlock = { locked.value = false }) { true }
+
+        unattended.pass { reported += it }
+
+        assertEquals(listOf<TaskState?>(TaskState.Held(TaskGate.LOCKED), null), reported)
     }
 
     @Test

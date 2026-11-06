@@ -34,7 +34,9 @@ enum class BuiltinShellFailure(val defaultFix: BuiltinShellFix, val duringPairin
     WifiNotAllowed(BuiltinShellFix.OpenWirelessDebugging, duringPairing = false),
     /** は本機の無線デバッグに接続できません。 */
     ConnectFailed(BuiltinShellFix.Retry, duringPairing = false),
-    /** ペアの承認が認識されません (長期間使用されなかった場合、またはユーザーがシステムで削除した場合にシステムによって取り消されました)。 */
+    /** ADB 目标不是本机自己的地址:调用方错误,不是会自己恢复的网络故障。 */
+    NotLocal(BuiltinShellFix.Retry, duringPairing = false),
+    /** 已配对的授权不认了(太久没用被系统撤销,或用户在系统里删了)。 */
     AuthorizationRevoked(BuiltinShellFix.RePair, duringPairing = false),
     /** ペアリングに使用されたキーは保存されていますが、読み取ることができません。デバイスはそのキーのみを認識し、静かに変更することはできません。再度ペアリングする必要があります（ペアリング時には新しいキーが必要です）。 */
     KeyUnreadable(BuiltinShellFix.RePair, duringPairing = false),
@@ -115,7 +117,10 @@ interface BuiltinShellControl {
         else -> HelperRestart.None
     }
 
-    /** はペアリング ポートの検索を開始します (ユーザーはペアリング ウィンドウを開きます)。繰り返し呼び出しても問題はありません。まだ探している場合は、この時点からタイマーを再起動してください。 */
+    /** 用户打开了「用 root 启动」且此刻能用:看门狗先经 su 起助手(状态是正在连接时,界面说正在用 root 启动)。 */
+    val rootStart: Boolean get() = false
+
+    /** 开始找配对端口(用户正在去打开配对窗口)。重复调用无害:还在找就从这时起重新计时。 */
     fun startDiscovery()
     fun stopDiscovery()
 

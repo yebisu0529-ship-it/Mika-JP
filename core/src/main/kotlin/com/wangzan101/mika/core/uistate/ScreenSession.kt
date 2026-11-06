@@ -26,6 +26,7 @@ import com.wangzan101.mika.core.observation.Place
 import com.wangzan101.mika.core.observation.Trust
 import com.wangzan101.mika.core.prompt.Feedback
 import com.wangzan101.mika.core.tool.HINT_PROTECTED
+import com.wangzan101.mika.core.tool.HINT_DISPLAY_CAPTURE
 import com.wangzan101.mika.core.tool.MAX_READ_CHARS
 import com.wangzan101.mika.core.tool.NOTE_CHANGED_DURING_READ
 import com.wangzan101.mika.core.tool.ToolExecution
@@ -177,7 +178,11 @@ internal class ScreenSession(
             put("screenChangedDuringRead", s.changedDuringRead)
             if (s.changedDuringRead) put("note", NOTE_CHANGED_DURING_READ)
             s.opened?.let { put("opened", openedJson(it)) }
-            if (s.protected) { put("protected", true); put("hint", HINT_PROTECTED) }
+            if (s.captureError != null) {
+                put("captureError", s.captureError)
+                put("hint", HINT_DISPLAY_CAPTURE)
+            }
+            else if (s.protected) { put("protected", true); put("hint", HINT_PROTECTED) }
             else if (unreadable(s) != null && ocr.isNullOrEmpty()) {
                 put("readable", false)
                 // ウィンドウの読取り不能と画像の利用可否を区別し、スクリーンショットと視覚定位による操作を妨げません。
@@ -194,9 +199,10 @@ internal class ScreenSession(
             put("truncated", hidden > 0 || omitted > 0)
             if (omitted > 0) put("omitted", hidden + omitted)
         }
-        // スクリーンショット防止ページには黒い画像がキャプチャされていますが、これはモデルを誤解させるだけです。
-        val png = if ((sendImage && textOnlyDepth == 0 || (recordFrames && recordFrame && textOnlyDepth == 0)) && !s.protected) screen.screenshotPng() else null
-        // メインモデルのみが画像を表示できます。決済ページと通常ページは同じルールに従って処理されます。
+        // 受保护或持续全黑的帧都不给视觉模型;后者仍保留可读控件供降级操作。
+        val png = if ((sendImage && textOnlyDepth == 0 || (recordFrames && recordFrame && textOnlyDepth == 0)) &&
+            !s.protected && s.captureError == null) screen.screenshotPng() else null
+        // 只有主模型能看图才留图；付款页和普通页面按同一规则处理
         val kept = png?.takeIf { visionEnabled }
         shots.remember(Recall(shotId, shots.step, s.packageName, kept, observationText(s, ocr.orEmpty())))
         val image = png.takeIf { sendImage }
@@ -210,7 +216,7 @@ internal class ScreenSession(
     suspend fun currentFrame(): Pair<ByteArray, Int>? {
         if (!visionEnabled) return null
         val s = screenAttempt { screen.peek() } ?: return null
-        if (s.protected) return null
+        if (s.protected || s.captureError != null) return null
         if (s.packageName == null && s.elements.isEmpty() && !s.hasWindow) return null
         val png = screenAttempt { if (screen.isProtected()) null else screen.screenshotPng() } ?: return null
         val shotId = shots.next()
@@ -240,8 +246,8 @@ internal class ScreenSession(
         val obs = screenAttempt { observe(withImage = false) } ?: return null
         val s = lastSnapshot ?: return null
         val shotId = (obs.content["screenshotId"] as? JsonPrimitive)?.content?.toIntOrNull() ?: return null
-        val png = if (s.protected) null else screenAttempt { obs.frame ?: if (screen.isProtected()) null else screen.screenshotPng() }
-        // レビューの補足画像です
+        val png = if (s.protected || s.captureError != null) null else screenAttempt { obs.frame ?: if (screen.isProtected()) null else screen.screenshotPng() }
+        // 回看里这一张补上画面
         val recalls = shots.recalls
         if (png != null) recalls.indexOfLast { it.id == shotId }.takeIf { it >= 0 }?.let { i ->
             val r = recalls[i]; recalls[i] = Recall(r.id, r.step, r.app, png, r.elementsText)
@@ -300,9 +306,10 @@ internal class ScreenSession(
                 (s.web?.dialog?.let { mapOf("dialog" to dialogJson(it)) } ?: emptyMap()) +
                 (quality(tree)?.let { mapOf("treeQuality" to JsonPrimitive(it)) } ?: emptyMap()) +
                 (ocrStatus?.let { mapOf("ocr" to JsonPrimitive(it)) } ?: emptyMap()) +
-                ((unreadable(s)?.takeIf { ocr.isNullOrEmpty() }?.let {
-                    mapOf("readable" to JsonPrimitive(false), "hint" to JsonPrimitive(unreadableHint(s, tree, ocrStatus)))
-                }) ?: treeHint(tree, ocrStatus)?.let { mapOf("hint" to JsonPrimitive(it)) } ?: emptyMap()))
+                (s.captureError?.let { mapOf("captureError" to JsonPrimitive(it), "hint" to JsonPrimitive(HINT_DISPLAY_CAPTURE)) } ?:
+                    (unreadable(s)?.takeIf { ocr.isNullOrEmpty() }?.let {
+                        mapOf("readable" to JsonPrimitive(false), "hint" to JsonPrimitive(unreadableHint(s, tree, ocrStatus)))
+                    } ?: treeHint(tree, ocrStatus)?.let { mapOf("hint" to JsonPrimitive(it)) } ?: emptyMap())))
         }
         val text = observationText(s, ocr.orEmpty())
         // 前回読んだ内容と同じであれば、先ほどの画面読みを圧迫しないように再度書きません。
@@ -310,7 +317,7 @@ internal class ScreenSession(
         // には、観察と同じルールがあります。アンチスクリーンショット ページは取得されません。レビューのために写真を残す前に、メインモデルのみが写真を表示できます。
         val imageReason = if (adaptiveVision && visionEnabled && tree.poor) tree.reason else null
         val sendImage = visionEnabled && (!adaptiveVision || imageReason != null)
-        val png = if ((recordFrames || sendImage) && textOnlyDepth == 0 && !s.protected) {
+        val png = if ((recordFrames || sendImage) && textOnlyDepth == 0 && !s.protected && s.captureError == null) {
             screenAttempt { screen.screenshotPng() }
         } else null
         val kept = png?.takeIf { visionEnabled }
@@ -495,7 +502,7 @@ internal class ScreenSession(
      * ポートは画面が安定するまで待機します。認識プロセス中にページ全体が変更され、再度認識されます。
      */
     private suspend fun visibleText(s: ScreenSnapshot, waitMs: Long): Pair<List<VisibleTextLine>?, String?> {
-        if (surface.id != "phone" || s.protected || !s.hasWindow) return null to null
+        if (surface.id != "phone" || s.protected || s.captureError != null || !s.hasWindow) return null to null
         var timedOut = true
         val raw = try {
             withTimeoutOrNull(waitMs) { screen.readVisibleText().also { timedOut = false } }
@@ -525,7 +532,7 @@ internal class ScreenSession(
      */
     suspend fun freshLook(withImage: Boolean, extra: (suspend () -> Observation?)? = null): Look {
         val s = screenAttempt { screen.snapshot() }
-        val png = if (withImage && s != null && !s.protected) {
+        val png = if (withImage && s != null && !s.protected && s.captureError == null) {
             screenAttempt { screen.screenshotPng() }
         } else null
         // ツリーが十分でない場合でも画面上のテキストを読みます: 画面に書かれている内容を確認してください

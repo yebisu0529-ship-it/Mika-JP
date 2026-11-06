@@ -134,7 +134,7 @@
     <string name="phone_usb_again_title">開始コマンドをもう一度実行</string>
     <string name="phone_usb_again_body">スマホを USB ケーブルでパソコンにつないで、パソコンでこのコマンドを実行します(この adb コマンドをスマホに対して実行できる方法なら、ほかの方法でもかまいません)。スマホを再起動するたびに必要です。</string>
     <string name="phone_success_note_usb">USB デバッグはオンのままにしてください。ヘルパーは USB コマンドで起動したため、スマホの再起動後は自動で復帰しません。Mika を開いて、もう一度コマンドを実行してください。</string>
-    <string name="phone_usage_note_usb">Mika 内蔵のヘルパーは USB の開始コマンドで起動したもので、ケーブルを抜いても動き続けます。「USB デバッグ」(開発者向けオプション内)はオンのままにしてください。オフにすると、スマホの操作が止まります。スマホの再起動後、ヘルパーは自動では復帰しません。Mika を開いて、もう一度コマンドを実行してください(「スマホの操作を設定」でコピーできます)。このスマホで「ワイヤレス デバッグ」が使えるなら、一度ペア設定すると、再起動後も Mika が自動で再接続できます。</string>
+    <string name="phone_usage_note_usb">Mika内蔵のヘルパーはUSBコマンドで起動したものです。多くの端末ではケーブルを抜いても動き続けますが、抜くと停止する端末もあります。「USBデバッグ」はオンのままにしてください。停止した場合や端末の再起動後は、USB接続して開始コマンドをもう一度実行してください。「スマホの操作を設定」でコピーできます。ワイヤレスデバッグが使える端末では、一度ペア設定すると再起動後も自動で再接続できます。</string>
     <string name="fail_root_denied">root の許可が拒否されました</string>
     <string name="fail_root_denied_body">root でスマホのヘルパーを起動できませんでした。「再試行」をタップして root 管理アプリで Mika を許可するか、「root でスマホのヘルパーを起動」をオフにしてください。</string>
     <string name="fail_root_no_answer">root から応答がありません</string>
@@ -165,4 +165,6 @@
     <string name="phone_success_note_root">ヘルパーは root で起動しました。スマホを再起動すると、Mika が自動でまた起動します</string>
     <string name="phone_usage_note_root">Mika の内蔵ヘルパーは root で起動され、Wi-Fi の有無にかかわらずバックグラウンドで動き続けます。スマホを再起動すると、Mika が root で自動的にまた起動します。ペア設定もパソコンも不要です。root が拒否されたり削除されたりしたときは、下の Root グループに表示されます。</string>
     <string name="phone_auto_read_fallback">数秒待っても何も起きない場合は、通知シェードを下にスワイプして「%1$s」にコードを入力してください。ペア設定の画面は閉じません。</string>
+    <string name="fail_not_local">ワイヤレスデバッグのアドレスがこの端末のものではありません</string>
+    <string name="fail_not_local_body">Mikaはこの端末自身のアドレスにだけ接続できます。接続し直してください。繰り返し表示される場合は、診断情報をコピーしてください。</string>
 </resources>

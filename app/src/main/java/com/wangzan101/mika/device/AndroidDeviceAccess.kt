@@ -41,6 +41,9 @@ internal class AndroidDeviceAccessPort(context: Context, private val helper: () 
 
     override suspend fun wake(): Boolean = withContext(Dispatchers.IO) { runCatching { helper()?.wakeDevice() == true }.getOrDefault(false) }
     override suspend fun dismiss(): Boolean = withContext(Dispatchers.IO) { runCatching { helper()?.dismissDeviceKeyguard() == true }.getOrDefault(false) }
+    override suspend fun revealCredential(): Boolean = withContext(Dispatchers.IO) {
+        runCatching { helper()?.revealDeviceCredential() == true }.getOrDefault(false)
+    }
 
     /**
      * は、メイン画面の SystemUI でタイプが一致する一意のパスワード ボックスのみを認識します。 SIM PIN/認識されないメーカーページは試行されません。

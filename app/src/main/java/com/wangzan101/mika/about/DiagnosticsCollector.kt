@@ -92,6 +92,8 @@ object DiagnosticsCollector {
                 root = phone.shellManager.root.state.value.let { r ->
                     Diagnostics.rootLine(r.suPresent, r.start, r.startGrant.name, r.commands, r.commandsGrant.name)
                 },
+                helperLaunchStage = phone.shellManager.lastHelperLaunchStage,
+                helperHandoffRejection = phone.hub.lastHandoffRejection,
             ),
             recovery = DiagnosticsSnapshot.Recovery(
                 consent = phone.recoverySettings.consent.value,

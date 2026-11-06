@@ -2,6 +2,7 @@ package com.wangzan101.mika.core.model
 
 import com.wangzan101.mika.core.net.NetProxy
 import com.wangzan101.mika.core.net.ProxyFailure
+import com.wangzan101.mika.core.usage.ModelHttpAttempts
 import com.wangzan101.mika.core.trace.TraceCall
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -53,6 +54,7 @@ internal object HttpSupport {
     }
 
     private suspend fun executeRaw(http: OkHttpClient, req: Request, attempt: TraceCall.Attempt?): RawResponse = suspendCancellableCoroutine { cont ->
+        if (req.tag(InferenceRequest::class.java) != null) cont.context[ModelHttpAttempts]?.start()
         val call = http.newCall(req)
         cont.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
@@ -79,6 +81,7 @@ internal object HttpSupport {
         observe(req) { attempt -> streamRaw(http, req, attempt, onEvent) }.also(::requireProxyAccepted)
 
     private suspend fun streamRaw(http: OkHttpClient, req: Request, attempt: TraceCall.Attempt?, onEvent: (String) -> Boolean): RawResponse = suspendCancellableCoroutine { cont ->
+        if (req.tag(InferenceRequest::class.java) != null) cont.context[ModelHttpAttempts]?.start()
         val call = http.newCall(req)
         cont.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {

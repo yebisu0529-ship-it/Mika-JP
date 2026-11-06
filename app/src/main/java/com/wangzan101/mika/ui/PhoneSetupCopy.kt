@@ -165,6 +165,10 @@ object PhoneSetupCopy {
             tr(R.string.fail_connect),
             tr(R.string.fail_connect_body),
         )
+        BuiltinShellFailure.NotLocal -> FailureCopy(
+            tr(R.string.fail_not_local),
+            tr(R.string.fail_not_local_body),
+        )
         BuiltinShellFailure.AuthorizationRevoked -> FailureCopy(
             tr(R.string.fail_revoked),
             tr(R.string.fail_revoked_body),

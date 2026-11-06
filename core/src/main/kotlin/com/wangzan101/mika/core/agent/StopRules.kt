@@ -85,6 +85,8 @@ internal fun userReason(e: ModelError): String = when (e) {
         "モデル「${e.model.ifEmpty { "選択中のモデル" }}」はツール呼び出しに対応していません。Mikaの操作には必要なため、「設定 › モデル」で対応モデルを選んでください。"
     is ModelError.ContextTooLong -> "モデルのコンテキスト長を超えました。より長いコンテキストに対応するモデルを選ぶか、タスクを分けてください。"
     is ModelError.ContentRefused -> "モデルがこの内容の処理を拒否しました。依頼内容を見直すか、別のモデルを選んでください。"
+    is ModelError.ReasoningEffortRejected ->
+        "モデルが選択した推論の強さを受け付けませんでした。サービスの応答：${quoted(e.detail)}。「設定 › モデル」で推論の強さを既定または対応する値に変更してください。"
     is ModelError.RateLimited -> "モデルサービスの呼び出し頻度制限に達し、再試行でも解消しませんでした。時間をおくか、アカウントの制限を確認してください。"
     is ModelError.Network -> "再試行してもモデルサービスに接続できませんでした。ネットワークとBase URLを確認してください。"
     is ModelError.Proxy -> when (e.failure) {

@@ -88,6 +88,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * タスク状態・前面アプリ・画面状態に応じてフローティングカプセルとカードを更新します。
  * 同じ入力元・近い位置のダブルタップで画面を入力欄にプレビューし、利用者が送信するまで会話へ渡しません。
  * キーボード表示中の位置とドラッグ位置を管理し、実際の操作は既存のタスクサービスへ渡します。
+ * カプセルとカードの切り替え時はウィンドウを明示的に隠し、古い描画を画面に残さない。
  */
 class CapsuleController(
     private val context: Context,
@@ -198,9 +199,9 @@ class CapsuleController(
     private var snap: ValueAnimator? = null
 
     /**
-     * には 2 つのフローティング ウィンドウがあり、それぞれが独自の位置に留まり、展開したり折りたたんだりするときに誰も動きません。[window] は 1 つ、カプセルとその 1 つを置き、横に止まります。 [cardWindow] がカードを置き、
-     * は左右中央に配置されます (折りたたむと内部は空になり、ウィンドウにはサイズがなく、下のアプリをブロックしません)。ウィンドウが星の位置とカードの位置の間を前後に移動すると、システムはウィンドウがスライドする動きをアニメーション化します。
-     * (オリジナルの Android ウィンドウ移動アニメーション) は、ハートが中央から横にスライドし、カードが横から中央にスライドするように見えます。
+     * [window] は画面端のカプセル、[cardWindow] は中央のカードを表示する。
+     * 切り替えでウィンドウを移動するとシステムの移動アニメーションが出るため、位置は固定し、
+     * 使わないウィンドウを明示的に非表示にしてから内容を空にする。
      */
     private var window: OverlayWindow? = null
     private var cardWindow: OverlayWindow? = null
@@ -375,6 +376,7 @@ class CapsuleController(
         cardWindow = cardW
         panelWindow = panel
         windowOn = service
+        syncWindowVisibility()
         for (it in listOf(ball, cardW)) it.onResize(::place)
         ball.onTouch { e ->
             wake()
@@ -433,6 +435,7 @@ class CapsuleController(
         expanded = false
         closing = false
         cardOut = false
+        syncWindowVisibility()
         follow = null
         zoomed = false
         cardHandle = null
@@ -442,7 +445,14 @@ class CapsuleController(
         updateThread(null, emptyList())
     }
 
-    // ---------- 入力 ----------
+    /** 两个窗口交替时显式显隐;空内容只负责排版,不承担把系统窗口旧帧撤下屏幕的职责。 */
+    private fun syncWindowVisibility() {
+        val visible = capsuleWindowVisibility(expanded, cardOut, closing)
+        window?.setVisible(visible.capsule)
+        cardWindow?.setVisible(visible.card)
+    }
+
+    // ---------- 输入 ----------
 
     /** が入力ボックスをクリックすると、フローティング レイヤーがキーボードを受け取ることができ、入力メソッドがそのレイヤーに対してポップアップ表示されます。 */
     private fun openInput() {
@@ -1158,6 +1168,7 @@ class CapsuleController(
         if (!expanded) anchorY = placedY + (window?.height ?: 0) / 2
         expanded = true
         closing = false
+        syncWindowVisibility()
     }
 
     /** ウィンドウの外側をクリックしてください。拡大された画面を閉じてから、カードを収納してください。 */
@@ -1184,6 +1195,7 @@ class CapsuleController(
             return
         }
         closing = true
+        syncWindowVisibility()
     }
 
     private fun closed() {
@@ -1245,7 +1257,10 @@ class CapsuleController(
         val c = card ?: return
         MikaTheme(reduceMotion = animationsOff(context)) {
             val height = if (cardHeight > 0) with(LocalDensity.current) { cardHeight.toDp() } else Dp.Unspecified
-            OverlayMotion(open = !closing, origin = ::cardOrigin, onClosed = ::closed, onOpened = { cardOut = true }) {
+            OverlayMotion(open = !closing, origin = ::cardOrigin, onClosed = ::closed, onOpened = {
+                cardOut = true
+                syncWindowVisibility()
+            }) {
                 CapsuleCard(c, preview, zoomed, actions, { elapsed(it) }, input = inputUi, thread = thread, height = height, onHandle = ::onHandle)
             }
         }
@@ -1352,5 +1367,11 @@ class CapsuleController(
     }
 }
 
-/** カプセル上で文が一時的に点滅します。 [kind] は設定の前のマークです (設定が完了している場合はチェック マーク、未完了の場合は感嘆符です)。 [opensMika] クリックしてミカを開きます。 [id] 各文は異なります (クリックするとカプセルの幅がリセットされます)。 */
+/** 一颗和卡片两个窗口此刻该不该显示;卡片收尾完成后无论动画停在哪一帧都不能再显示。 */
+internal data class CapsuleWindowVisibility(val capsule: Boolean, val card: Boolean)
+
+internal fun capsuleWindowVisibility(expanded: Boolean, cardOut: Boolean, closing: Boolean): CapsuleWindowVisibility =
+    CapsuleWindowVisibility(capsule = !expanded || !cardOut || closing, card = expanded)
+
+/** 胶囊上临时闪的一句:[kind] 定前面的标记(办好了是勾、没办成是叹号);[opensMika] 时点它打开 Mika;[id] 每句不同(胶囊按它重新定宽)。 */
 private data class CapsuleNote(val text: String, val kind: CapsuleKind, val opensMika: Boolean, val id: Int)

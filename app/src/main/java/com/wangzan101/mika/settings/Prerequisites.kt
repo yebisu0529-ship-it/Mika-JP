@@ -56,8 +56,8 @@ sealed interface Problem {
     data object SystemTooOld : Problem
     /** 内蔵アシスタントが実行されていません (設定なし、ワイヤレス デバッグがオフ、接続中、エラー)。 */
     data class PhoneHelper(val status: BuiltinShellStatus) : Problem
-    /** [userLocked] が true の場合、起動後にロックが解除されていないため、実行されていません。ロックを解除すると自動的に復元されます。ユーザーがそれをオフにして再度オンにすることは許可されるべきではありません。 */
-    data class Accessibility(val state: AccessibilityState, val userLocked: Boolean = false) : Problem
+    /** [userLocked] 为真时没在运行是因为开机后还没解锁过;[restrictedSettings] 为真时系统可能阻止绑定。 */
+    data class Accessibility(val state: AccessibilityState, val userLocked: Boolean = false, val restrictedSettings: Boolean = false) : Problem
     data object NoModel : Problem
     /** はタスクをブロックしませんが、進行状況と「必要です」リマインダーが表示されません。 */
     data object NotificationsOff : Problem
@@ -93,7 +93,7 @@ object Prerequisites {
                 add(Problem.PhoneHelper(status.builtinShell))
             }
             if (status.sdkInt >= MIN_SDK && status.accessibility != AccessibilityState.On) {
-                add(Problem.Accessibility(status.accessibility, status.userLocked))
+                add(Problem.Accessibility(status.accessibility, status.userLocked, status.restrictedSettings))
             }
             if (!hasMainModel) add(Problem.NoModel)
             if (!status.notificationsAllowed) add(Problem.NotificationsOff)

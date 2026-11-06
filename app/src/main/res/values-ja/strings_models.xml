@@ -188,4 +188,6 @@
     <string name="speech_footer">音声モデルらしいものだけを表示しています。お使いのモデルが見当たらない場合は、名前を入力してください。選ぶと、短い音声をテストとして文字に変換します。</string>
     <string name="speech_pick_failed">そのモデルでは文字に変換できませんでした: %1$s</string>
     <string name="speech_pick_timeout">%1$s はテスト用の音声に %2$d 秒以内に応答しませんでした</string>
+    <string name="model_context_read_timeout">読み取りタイムアウト（秒）</string>
+    <string name="model_context_timeout_range">1〜%1$d秒で入力してください</string>
 </resources>

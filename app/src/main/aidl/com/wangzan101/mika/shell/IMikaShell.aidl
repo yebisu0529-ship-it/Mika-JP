@@ -111,6 +111,8 @@ interface IMikaShell {
     // 近くで音と画面をオフにします。 keep / close はモデルによってマークされたキーです (パッケージ名、もう 1 つはパッケージ名 @user)。
     // AppsAfterTask.KEY_* に戻ります。keep= 残ったキー、closed= 閉じる「キー: 理由」、note= 移動できない場合の理由 (空でも可)。ミカ以外の画面はヌルです
     Bundle finishDisplay(int displayId, in String[] keep, in String[] close) = 48;
+    // 安全锁屏还停在通知/指纹页时,做一次定向给 SystemUI 的通用上滑;不含凭据。
+    boolean revealDeviceCredential() = 49;
 
     // は、以前に決定された破棄トランザクション番号に従います。 AIDL では、すべてのメソッドに番号を付けるか、何も番号を付けないかのどちらかが必要です。
     void destroy() = 16777114;

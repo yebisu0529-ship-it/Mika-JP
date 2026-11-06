@@ -41,6 +41,8 @@ sealed class ModelError(message: String, cause: Throwable? = null) : Exception(m
     class StreamCut : ModelError("返信が完了する前に接続が切れました")
     class Server(val status: Int) : ModelError("モデルサービスでエラーが発生しました（HTTP $status）")
     class ContentRefused : ModelError("モデルがこの内容の処理を拒否しました")
+    /** サービスが推論の強さを明示的に拒否した場合は、設定の見直しを案内する。 */
+    class ReasoningEffortRejected(val detail: String) : ModelError("モデルが選択した推論の強さを受け付けませんでした")
     /** ChatGPTプランの他アプリ向け利用枠が上限に達した。再試行せず、枠の回復を待つかモデルを変える。 */
     class ChatGptLimitReached : ModelError("ChatGPTの利用上限に達しました")
     /** この ChatGPT アカウントでは他アプリでプランの利用枠を使えない(プラン不一致、地域またはアカウントポリシーで不可)。再試行しない。 */

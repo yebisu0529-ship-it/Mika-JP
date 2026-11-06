@@ -1,17 +1,15 @@
 package com.wangzan101.mika.cap.phone.a11y
 
+import android.view.accessibility.AccessibilityEvent
+
 /**
  * は、エージェントのアクションによりユーザーのホーム画面でアプリが開かれるかどうかを決定します。アプリは、Mika 画面上の独自のページからではなく、バックグラウンドから起動します。
  * (サービス、通知ジャンプ、システム セレクター、クロスユーザー転送) 別のアプリを開くと、システムはデフォルトでそのアプリをホーム画面に配置します。ミカの画面には何も変化が見られません。
  * モデルはクリックされていないと判断し、何度もクリックします。それを認識したら、それをミカの画面に戻します (AndroidScreen を参照)。
  *
- * は、アクションの開始後短期間にメイン画面の上部に変更されたタスクのみを確認します (組み込みアシスタントによる注記、MainScreenLog を参照)。カウントされません:
- * はこの期間ではありません。デスクトップや最近のタスク、ミカ自身、デスクトップ アプリ ([excluded]) などのページ。他の画面から移動（引き継ぎ、他のタスクの引き継ぎ）。 現時点では、
- * はホーム画面には表示されません。この期間中にユーザーがホーム画面で何かをクリックした（誰が開いたかは不明なので、ユーザー自身が開いたと思われます）。
- * アクションが最上部に戻る前にメイン画面の最上部にあったタスク (削除されたタスクを削除すると表示されます)。
- * アクションの前に、ホーム画面上部のタスクでページが変更されました。ユーザーが使用していたアプリが開かれ、ユーザーの目の前で開かれ、移動しませんでした ([InUse])。
- * ユーザーはポップアップされたタスクをすでにクリックしています (クリックされたウィンドウはそのタスクに属します)。このタスクもユーザーによって使用されているため、移動できません。
- * 純粋なロジック。
+ * 操作開始直後に主画面へ出たタスクを判定する。Mika自身、ホーム、ほかの画面からの移動は対象外。
+ * ユーザーのタップ、またはホームへ戻ってからアプリを開いた記録があれば、ユーザー操作として扱う。
+ * もともと主画面にあったタスクや、ユーザーが操作を始めたタスクも移動させない。
  */
 internal object MainScreenSpill {
     const val MAIN = 0
@@ -39,6 +37,15 @@ internal object MainScreenSpill {
     /** は、ユーザーが使用しているアプリをホーム画面で開きます。そのままにして、モデルに指示します。 */
     data class InUse(override val arrival: Arrival) : Verdict
 
+    /** 主屏上的这次事件能证明用户在亲手操作;系统触摸事件不要求 App 另发控件点击事件。 */
+    fun isUserTap(eventType: Int): Boolean = when (eventType) {
+        AccessibilityEvent.TYPE_VIEW_CLICKED,
+        AccessibilityEvent.TYPE_VIEW_LONG_CLICKED,
+        AccessibilityEvent.TYPE_TOUCH_INTERACTION_START,
+        -> true
+        else -> false
+    }
+
     /**
      * [since] アクションが開始されると、[windowMs] の後に表示されるタスクはこのアクションとしてカウントされません。 [topBefore] アクション開始時のメイン画面の上部にあるタスク。
      * [userTaps] ユーザーがホーム画面で何かをクリックしたときの時刻とパッケージ。同じタスクには課題が 1 つだけあり (最後の課題を取る)、順番に配置されます。
@@ -50,10 +57,13 @@ internal object MainScreenSpill {
         topBefore: Int,
         excluded: Set<String>,
         userTaps: List<Tap>,
+        homePackages: Set<String> = emptySet(),
     ): List<Verdict> {
+        val ordered = arrivals.sortedBy { it.at }
+        val homeReturns = ordered.filter { it.packageName in homePackages }.map { it.at }
         val out = LinkedHashMap<Int, Verdict>()
-        for (a in arrivals.sortedBy { it.at }) {
-            val v = verdict(a, since, windowMs, topBefore, excluded, userTaps) ?: continue
+        for (a in ordered) {
+            val v = verdict(a, since, windowMs, topBefore, excluded, userTaps, homeReturns) ?: continue
             out.remove(a.taskId)
             out[a.taskId] = v
         }
@@ -79,8 +89,17 @@ internal object MainScreenSpill {
      * それが現れる前にメイン画面最上部にあったもの [topBefore] ではないもの）; ユーザーがちょうど選択肢をタップした直後でも「ユーザーがタップした」ことを理由に除外しない。選択ダイアログが閉じたかどうかは間隔を置いて確認するため、
      * 閉じる前 [slackMs] 以内に現れたものも該当する。なければ null。
      */
-    fun picked(arrivals: List<Arrival>, chooserTask: Int, gone: Long, slackMs: Long, waitMs: Long, topBefore: Int, excluded: Set<String>): Arrival? =
-        decide(arrivals.filter { it.taskId != chooserTask }, gone - slackMs, waitMs + slackMs, topBefore, excluded, emptyList())
+    fun picked(
+        arrivals: List<Arrival>,
+        chooserTask: Int,
+        gone: Long,
+        slackMs: Long,
+        waitMs: Long,
+        topBefore: Int,
+        excluded: Set<String>,
+        homePackages: Set<String> = emptySet(),
+    ): Arrival? =
+        decide(arrivals.filter { it.taskId != chooserTask }, gone - slackMs, waitMs + slackMs, topBefore, excluded, emptyList(), homePackages)
             .filterIsInstance<PullBack>().lastOrNull()?.arrival
 
     /**
@@ -97,12 +116,22 @@ internal object MainScreenSpill {
     fun authenticatorUi(pkg: String, authenticators: Set<String>, hasLauncher: Boolean): Boolean =
         pkg in authenticators && !hasLauncher
 
-    private fun verdict(a: Arrival, since: Long, windowMs: Long, topBefore: Int, excluded: Set<String>, userTaps: List<Tap>): Verdict? {
+    private fun verdict(
+        a: Arrival,
+        since: Long,
+        windowMs: Long,
+        topBefore: Int,
+        excluded: Set<String>,
+        userTaps: List<Tap>,
+        homeReturns: List<Long>,
+    ): Verdict? {
         if (a.at < since || a.at > since + windowMs) return null
         val pkg = a.packageName ?: return null
         if (!a.standard || pkg in excluded) return null
         if (a.from != NEW && a.from != MAIN) return null
         if (a.now != MAIN) return null
+        // 用户先回主屏桌面，再从桌面或通知栏打开 App：这条导航链不依赖控件是否另发点击事件
+        if (homeReturns.any { it in since..a.at }) return null
         if (userTaps.any { it.at in since..a.at }) return null
         // ユーザーはすでにクリックしています (このアプリが表示された後、ウィンドウをクリックします): ユーザーに任せ、移動しないでください
         if (userTaps.any { it.at >= a.at && it.packageName == pkg }) return InUse(a)

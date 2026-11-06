@@ -23,7 +23,7 @@ object ModelHttp {
 
     /** OpenAI 互換インターフェイス (同じ一連のダイアログと音訳) のマッピングが正しくありません。 [model] は、要求されたモデル名です。 */
     fun openAiError(status: Int, retryAfter: String?, body: String, model: String): ModelError =
-        ModelAccessErrors.of(status, body, model) ?: when {
+        ModelAccessErrors.of(status, body, model) ?: reasoningEffortRejected(status, body) ?: when {
             status == 401 -> ModelError.Auth()
             status == 402 || body.contains("insufficient_quota") -> ModelError.QuotaExceeded()
             status == 429 -> ModelError.RateLimited(HttpSupport.retryAfterMs(retryAfter))
@@ -36,6 +36,19 @@ object ModelHttp {
 
     /** HTTP 400 がコンテキスト上限超過を示すか判定します。OpenAI互換・Responses・Anthropic で共用します。 */
     fun contextTooLong(status: Int, body: String): Boolean = status == 400 && saysContextTooLong(body)
+
+    /** HTTP 400 明确指出思考强度参数无效。只认参数名或完整的协议字段,不从任意“unsupported”文字猜。 */
+    fun reasoningEffortRejected(status: Int, body: String): ModelError.ReasoningEffortRejected? {
+        if (status != 400) return null
+        val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+        val error = root?.get("error") as? JsonObject
+        val param = (error?.get("param") as? JsonPrimitive)?.contentOrNull ?: (root?.get("param") as? JsonPrimitive)?.contentOrNull
+        val lower = body.lowercase()
+        val namesParameter = param in setOf("reasoning.effort", "reasoning_effort") ||
+            (param == null && ("reasoning.effort" in lower || "reasoning_effort" in lower))
+        val rejected = listOf("invalid", "unsupported", "not supported", "unknown").any { it in lower }
+        return if (namesParameter && rejected) ModelError.ReasoningEffortRejected(ModelAccessErrors.detail(body)) else null
+    }
 
     /** 上限を超える表現と、その近くの context length・size・limit・window、model length を大文字小文字を区別せず確認します。従来の context_length・maximum context・context length of only も認識し、単に context window があるだけでは上限超過と判定しません。 */
     internal fun saysContextTooLong(text: String): Boolean = CONTEXT_TOO_LONG.containsMatchIn(text)

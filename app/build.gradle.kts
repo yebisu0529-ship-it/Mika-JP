@@ -26,8 +26,8 @@ android {
         applicationId = "jp.studioyebisu.mika"
         minSdk = 30
         targetSdk = 35
-        versionCode = 39
-        versionName = "0.1.36-jp.2"
+        versionCode = 40
+        versionName = "0.1.37-jp.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GIT_HASH", "\"$gitHash\"")
         // 正式版に移行したら、バージョン番号の後ろに付けるベータ表示を無効にする。

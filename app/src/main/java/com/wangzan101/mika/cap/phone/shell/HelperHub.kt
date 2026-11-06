@@ -38,7 +38,11 @@ class HelperHub(context: Context) {
     /** アシスタント引き継ぎ時間からの「ミカが殺された後に引き上げられた」記録（診断情報用）。プルされない場合は null です。 */
     val restores: StateFlow<HelperRestoreReport?> = _restores.asStateFlow()
 
-    /** は、アシスタントを通じてこのプロセスの WebView デバッグ ソケットに接続します。アシスタントが利用できない場合は IOException がスローされ、アシスタントが拒否するか接続できない場合は null がスローされます。 */
+    /** 最近一次交接拒绝的固定枚举;不含口令、Binder、包路径或调用方数据。 */
+    @Volatile var lastHandoffRejection: String? = null
+        private set
+
+    /** 经助手代连本进程的 WebView 调试套接字;助手不在时抛 IOException,助手拒绝或连不上为 null。 */
     fun openDevtoolsSocket(endpoint: String): ParcelFileDescriptor? {
         val sh = shell.value ?: throw IOException("phone helper is not running")
         return sh.openDevtoolsSocket(endpoint)
@@ -109,6 +113,7 @@ class HelperHub(context: Context) {
     }
 
     private fun reject(why: HelperHandoff.Reject): Bundle {
+        lastHandoffRejection = why.name
         Log.w(TAG, "helper handoff rejected: $why")
         return Bundle().apply {
             putBoolean(HelperHandoff.KEY_ACCEPTED, false)

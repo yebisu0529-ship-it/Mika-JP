@@ -82,6 +82,15 @@ class HelperRestoreTest {
     }
 
     @Test
+    fun forceStopPreventsRestoreUntilTheUserOpensTheApp() {
+        val p = HelperRestorePolicy()
+        assertEquals(HelperRestorePolicy.Decision.ForceStopped, p.decide(yes, false, 1_000, forceStopped = true))
+        assertTrue(p.report(1_000).empty)
+        assertEquals(HelperRestorePolicy.Decision.AppBack, p.decide(yes, true, 2_000, forceStopped = true))
+        assertEquals(HelperRestorePolicy.Decision.Restore, p.decide(yes, false, 3_000, forceStopped = false))
+    }
+
+    @Test
     fun policyBacksOffWithinWindowThenAllowsAgain() {
         val p = HelperRestorePolicy(maxAttempts = 3, windowMs = 600_000)
         repeat(3) { assertEquals(HelperRestorePolicy.Decision.Restore, p.decide(yes, false, now = 10_000L + it * 30_000)) }

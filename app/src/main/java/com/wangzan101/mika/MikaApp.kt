@@ -88,6 +88,9 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
 
     val remoteTasks by lazy { RemoteTaskHub(this) }
 
+    /** 本人が許可したメイン画面の起動・ロック解除。PC接続と定時タスクで同じ処理を共有する。 */
+    val deviceAccess by lazy { com.wangzan101.mika.device.AndroidDeviceAccess(this) { phone.hub.shell.value } }
+
     /**
      * コンピューター接続 (MCP): スイッチ、アクセス トークン (サービス プロバイダーのキーと同様に暗号化および保存)、モニタリング。 LAN タイプはデフォルトではオフになっています。
      * USB は、今度はシャットダウンされるまで、adb 経由でコンピューターによって開かれます (ブート番号は、シェルで読み取られた `settings get global boot_count` と同じです)。
@@ -99,7 +102,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
             com.wangzan101.mika.settings.McpUsbSettings(settingsDir,
                 bootId = { android.provider.Settings.Global.getString(contentResolver, android.provider.Settings.Global.BOOT_COUNT) ?: "null" },
                 infoFile = { getExternalFilesDir(null)?.let { java.io.File(it, com.wangzan101.mika.core.mcp.McpUsb.INFO_FILE) } }),
-            remoteTasks, com.wangzan101.mika.device.AndroidDeviceAccess(this) { phone.hub.shell.value },
+            remoteTasks, deviceAccess,
             com.wangzan101.mika.settings.RelaySettings(settingsDir, com.wangzan101.mika.settings.KeystoreKeyCipher("mika-remote-relay")))
     }
     val childRuns by lazy { FileChildRunStore(java.io.File(filesDir, "children-v3.json")) }
@@ -288,6 +291,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
                 override fun answerIn(conversationId: String, text: String) { key(conversationId)?.let { TaskService.answer(app, text, it) } }
                 override fun approveIn(conversationId: String, key: Int) { key(conversationId)?.let { TaskService.approve(app, key, it) } }
                 override fun declineIn(conversationId: String, key: Int) { key(conversationId)?.let { TaskService.decline(app, key, it) } }
+                override fun unmuteIn(conversationId: String) { taskState.run(conversationId)?.unmute() }
             },
             conversations,
             taskState.busy,

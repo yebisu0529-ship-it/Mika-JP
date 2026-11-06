@@ -110,9 +110,12 @@ class BuiltinShellEngineTest {
         assertEquals(BuiltinShellFailure.WrongCode, BuiltinShellFailures.ofPairing(AdbPairingException.Reason.WRONG_CODE))
         assertEquals(BuiltinShellFailure.PairingWindowClosed, BuiltinShellFailures.ofPairing(AdbPairingException.Reason.CONNECT_FAILED))
         assertEquals(BuiltinShellFailure.Unknown, BuiltinShellFailures.ofPairing(AdbPairingException.Reason.TLS_FAILED))
+        assertEquals(BuiltinShellFailure.NotLocal, BuiltinShellFailures.ofPairing(AdbPairingException.Reason.NOT_LOCAL))
         assertEquals(BuiltinShellFailure.AuthorizationRevoked, BuiltinShellFailures.ofConnection(AdbConnectionException.Reason.UNAUTHORIZED))
         assertEquals(BuiltinShellFailure.ConnectFailed, BuiltinShellFailures.ofConnection(AdbConnectionException.Reason.CONNECT_FAILED))
         assertEquals(BuiltinShellFailure.ConnectFailed, BuiltinShellFailures.ofConnection(AdbConnectionException.Reason.TLS_FAILED))
+        assertEquals(BuiltinShellFailure.NotLocal, BuiltinShellFailures.ofConnection(AdbConnectionException.Reason.NOT_LOCAL))
+        assertEquals(false, BuiltinShellFailures.retryable(BuiltinShellFailure.NotLocal))
     }
 
     @Test
@@ -237,6 +240,18 @@ class BuiltinShellEngineTest {
         assertEquals(1, launches())
         assertEquals(BuiltinShellStatus.Failed(BuiltinShellFailure.KeyUnreadable, BuiltinShellFix.RePair), e.status.value)
         assertTrue(e.lastError!!.startsWith("AdbKeyUnreadableException"))
+    }
+
+    @Test
+    fun notLocalIsNotRetriedAsANetworkFailure() = runTest {
+        platform.pairedFlag = true
+        platform.wifi = false // 也不能被二次归成 NoWifi
+        platform.launchResults += AdbConnectionException.Reason.NOT_LOCAL
+        val e = engine()
+        e.retry()
+        advanceUntilIdle()
+        assertEquals(1, launches())
+        assertEquals(BuiltinShellStatus.Failed(BuiltinShellFailure.NotLocal), e.status.value)
     }
 
     @Test

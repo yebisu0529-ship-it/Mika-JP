@@ -199,6 +199,7 @@ class ResponsesModel(
         err?.let { errorOf(it.code, it.message, it.param) }
             // アカウントのログインにより本人確認が行われました: 認識できないエラー コードを含む 403 は、ギアが不十分であるか、キーとみなされるべきではないか、または特定のモデルがアクティベートされていないことを意味します。
             ?: (if (status == 403 && accountLogin != null) ModelError.AccountPlanNotAllowed(accountLogin, err?.message.orEmpty().take(200)) else null)
+            ?: ModelHttp.reasoningEffortRejected(status, body)
             ?: ModelAccessErrors.of(status, body, model) ?: when {
             status == 401 -> ModelError.Auth()
             status == 403 -> if (chatGptPlan) ModelError.ChatGptNotEligible(err?.message.orEmpty().take(200)) else ModelError.Auth()

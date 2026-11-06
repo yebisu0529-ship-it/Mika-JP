@@ -84,7 +84,7 @@ class PhoneSetupCopyTest {
         assertEquals(
             // root が拒否または応答なしなら、再試行で su に要求し直す。
             listOf(
-                BuiltinShellFailure.ConnectFailed, BuiltinShellFailure.HelperStartFailed,
+                BuiltinShellFailure.ConnectFailed, BuiltinShellFailure.NotLocal, BuiltinShellFailure.HelperStartFailed,
                 BuiltinShellFailure.RootDenied, BuiltinShellFailure.RootNoAnswer, BuiltinShellFailure.Unknown,
             ),
             reconnectable.map { (it as BuiltinShellStatus.Failed).reason },
@@ -199,5 +199,63 @@ class PhoneSetupCopyTest {
         assertTrue(note, note.contains("シェルユーザーとしての起動"))
         assertTrue(note, note.contains("root コマンドの実行許可は別の設定"))
         assertTrue(note, note.contains("root 管理環境によっては利用できない"))
+    }
+
+    /** 「用 root 启动」用不了时,设置页、横幅都直说原因和怎么办;拒绝、没回应的给重试。正在用 root 启动时照实说。 */
+    @Test
+    fun rootStartStatusSaysWhyAndWhatToDo() {
+        val denied = BuiltinShellStatus.Failed(BuiltinShellFailure.RootDenied)
+        assertEquals("root 授权被拒绝了", PhoneSetupCopy.failure(BuiltinShellFailure.RootDenied).title)
+        assertTrue(PhoneSetupCopy.statusLine(denied).contains("重试"))
+        assertTrue(PhoneSetupCopy.canReconnect(denied))
+        val banner = StatusCopy.banner(Problem.PhoneHelper(denied))
+        assertEquals("root 授权被拒绝了", banner.title)
+        assertEquals(PhoneSetupCopy.RECONNECT, banner.link)
+        val gone = BuiltinShellStatus.Failed(BuiltinShellFailure.RootUnavailable)
+        assertTrue(PhoneSetupCopy.statusLine(gone).contains("找不到 su"))
+        assertFalse(PhoneSetupCopy.canReconnect(gone))
+        assertEquals("手机助手没在运行,正在用 root 启动…", PhoneSetupCopy.statusLine(BuiltinShellStatus.Connecting, rootStart = true))
+        assertEquals(PhoneSetupCopy.statusLine(BuiltinShellStatus.Connecting), PhoneSetupCopy.statusLine(BuiltinShellStatus.Connecting, rootStart = false))
+        // 经 root 起的不靠 Wi-Fi:USB 调试关着也不提醒断 Wi-Fi 会停
+        assertEquals(PhoneSetupCopy.statusLine(BuiltinShellStatus.Running), PhoneSetupCopy.statusLine(BuiltinShellStatus.Running, usbDebugging = false, rootStart = true))
+    }
+
+    /** 自动启动没有开关:首次明确授权,之后自动;拒绝和没回应都能亲手重试。Root 命令仍默认关闭。 */
+    @Test
+    fun rootLinesFollowAuthorization() {
+        assertEquals(PhoneSetupCopy.ROOT_PENDING, PhoneSetupCopy.rootStartLine(RootGrant.Pending))
+        assertTrue(PhoneSetupCopy.rootStartLine(RootGrant.Unknown).contains("点这里授权"))
+        assertTrue(PhoneSetupCopy.rootStartLine(RootGrant.Granted).contains("已授权"))
+        assertTrue(PhoneSetupCopy.rootStartLine(RootGrant.Denied).contains("再问一次"))
+        assertTrue(PhoneSetupCopy.rootStartLine(RootGrant.NoAnswer).contains("再问一次"))
+        assertTrue(PhoneSetupCopy.rootStatusLine(RootGrant.Unknown).contains("检测到 su"))
+        assertTrue(PhoneSetupCopy.rootStatusLine(RootGrant.Granted).contains("已授权"))
+        assertFalse(PhoneSetupCopy.rootStatusLine(RootGrant.Denied).contains("再问一次"))
+        assertTrue(PhoneSetupCopy.rootCommandsLine(false, RootGrant.Unknown).contains("默认关闭"))
+        assertTrue(PhoneSetupCopy.rootCommandsLine(true, RootGrant.Granted).contains("已开启"))
+        assertTrue(PhoneSetupCopy.rootCommandsLine(false, RootGrant.Denied).contains("保持关闭"))
+        assertTrue(PhoneSetupCopy.rootEntryLine(false).contains("已关闭"))
+        assertTrue(PhoneSetupCopy.rootEntryLine(true).contains("已开启"))
+        assertTrue(PhoneSetupCopy.ROOT_COMMANDS_WARNING.contains("其他 App 的数据"))
+        assertEquals("允许 Mika 执行 root 命令", PhoneSetupCopy.ROOT_COMMANDS)
+        assertEquals("用 root 启动手机助手", PhoneSetupCopy.ROOT_START)
+    }
+
+    /** USB 启动不承诺拔线后一定能用:成功页、设置页和重跑卡片都给出通用恢复办法。 */
+    @Test
+    fun usbCopyDoesNotPromiseUnplugSurvival() {
+        listOf(
+            PhoneSetupCopy.successNote(HelperRestart.UsbCommand),
+            PhoneSetupCopy.usageNote(HelperRestart.UsbCommand),
+            PhoneSetupCopy.usbCard(HelperRestart.UsbCommand).second,
+        ).forEach { text ->
+            assertTrue(text, text.contains("多数手机"))
+            assertTrue(text, text.contains("拔掉数据线"))
+            assertTrue(text, text.contains("再运行一次"))
+            assertFalse(text, text.contains("拔掉数据线也会继续运行"))
+        }
+        // 无线调试路径的提示不受 USB 恢复说明影响
+        assertFalse(PhoneSetupCopy.successNote(HelperRestart.Wireless).contains("拔掉数据线"))
+        assertFalse(PhoneSetupCopy.usageNote(HelperRestart.Wireless).contains("拔掉数据线"))
     }
 }

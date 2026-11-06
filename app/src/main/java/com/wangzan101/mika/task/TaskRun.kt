@@ -54,6 +54,7 @@ import com.wangzan101.mika.chat.ConversationStore
 import com.wangzan101.mika.memory.MemoryRuntime
 import com.wangzan101.mika.settings.MemorySwitches
 import com.wangzan101.mika.settings.ProviderStore
+import com.wangzan101.mika.core.model.ModelRole
 import com.wangzan101.mika.core.record.RunEvent
 import com.wangzan101.mika.core.replay.RouteMatcher
 import com.wangzan101.mika.core.replay.RouteRecorder
@@ -138,6 +139,14 @@ import com.wangzan101.mika.core.tool.ToolIndex
 import com.wangzan101.mika.core.assembly.legacyNames
 import com.wangzan101.mika.core.assembly.toolDispatcher
 import com.wangzan101.mika.core.cap.web.WEB
+
+/**
+ * 浮层恢复声音的路由:只有真正把 App 交到用户手上的接管才处理;接管对象从任务开跑起就一直存在,
+ * 不能仅凭非空提前返回。等待接管、网页接管或没有接管目标时都落到普通手机音频路径。
+ */
+internal fun restorePipSound(takeover: Takeover?, restorePhone: () -> Unit) {
+    if (takeover?.unmute() != true) restorePhone()
+}
 
 /**
  * タスクのすべてのステータス: 仮想画面、ループ、レベル、テイクオーバー、ミュート、モニタリング。 [TaskService] は、サービスのライフサイクル、インテントの配布、および通知のみを考慮します。
@@ -271,7 +280,9 @@ class TaskRun(
         /** シェル プロセスがなくなり、仮想画面とその上のアプリがなくなりました。タスクを続行できません。 */
     @Volatile var shellDied = false
         internal set
-    /** のリリースとクローズは相互に排他的です。 [ended] の後に状態は書き込まれず、後期リリースでは最終状態を上書きしたり、ロックを再取得したりすることはできません。 */
+    /** 已接上的手机侧;浮层恢复声音据此找到当前目标 App,收尾时清空。 */
+    @Volatile private var phone: PhoneSide? = null
+    /** 发布与收尾互斥;[ended] 之后不再写状态,迟到的发布不能盖掉终态或重新拿锁。 */
     private val publishLock = Any()
     private var ended = false
 
@@ -304,7 +315,20 @@ class TaskRun(
     fun skip(waitKey: Int?) { takeover?.let { t -> scope.launch { t.skip(waitKey) } } }
     fun putAside(waitKey: Int?) { takeover?.let { t -> scope.launch { t.putAside(waitKey) } } }
 
-    /** が質問に答えます。待機状態がなくなったとき (タイムアウト後の応答が応答されたとき)、[tooLate] が呼び出され、この応答が役に立たないことをユーザーに伝えます。 */
+    /** 浮层上的一次性「恢复声音」;重复点击会重试真实恢复,没有手机侧或目标 App 时不动。 */
+    fun unmute() {
+        scope.launch(Dispatchers.IO) {
+            restorePipSound(takeover) {
+                val p = phone ?: return@restorePipSound
+                val target = p.screen.target.value ?: return@restorePipSound
+                if (!p.audio.unmute(target.packageName, copyUser(target.userId))) {
+                    Log.w(TAG, "could not restore sound of ${target.packageName} from pip")
+                }
+            }
+        }
+    }
+
+    /** 回答提问;已经不在等(超时后才答、已答过)时调 [tooLate] 告诉用户这条回答没用上。 */
     fun answer(text: String, tooLate: () -> Unit) {
         if (loop == null) return
         if (_state.value is TaskState.WaitingInput) scope.launch {
@@ -452,8 +476,8 @@ class TaskRun(
     suspend fun execute(priorTurns: List<Turn>): TaskState {
         // 携帯電話側 (内蔵アシスタント、アクセシビリティ、仮想画面) は、app の初回起動時にのみ接続されます: Web ページとサンドボックスのみを使用するタスクにはそれらは必要ありません
         var connection: com.wangzan101.mika.cap.phone.shell.ShellBinding? = null
-        var phone: PhoneSide? = null
-        // 仮想画面、Webページ表示等：構築後その場で返却、終了時に一緒にリリース; 「ビルド後に変数を記録する」必要がなく、途中で落としてもキャンセルを取り逃がしません。
+        phone = null
+        // 虚拟屏、网页显示等:建好当场归它,收尾时一起放掉;不经「建完再记到变量」,取消落在中间也不会漏
         val resources = ResourceScope()
         var watcher: DeviceStateWatcher? = null
         var mute: AudioMute? = null
@@ -493,6 +517,11 @@ class TaskRun(
             // ユーザーは、ブラウザ ページ上のページに、どのページを現在の Web ページ ラベルとしてこのタスクに貸与する必要があるかを尋ねました (PageLoans を参照)。実行中にページがまだ開いている場合にのみ借用できます。
             val pageLoan = if (provenance.origin == RunOrigin.Ui) withContext(Dispatchers.Main) { UserBrowser.existing()?.claim(conversationId, key) } else null
             val light = env.lightModelFactory(service, session)
+            // 同一模型分成两个实例并不会更便宜或更快;禁止它给批量/收尾工具反而只会增加改派和逐步操作。
+            // 这只跳过逐步分工,轻量角色仍可用于意图判断、标题和收尾等辅助调用。
+            val routedLight = light?.takeIf {
+                !ProviderStore.get(service).roles.value.sameModel(ModelRole.Main, ModelRole.Light)
+            }
             val vision = env.visionModelFactory(service, session)
 
             val (knowledge, skills) = withContext(Dispatchers.IO) {
@@ -539,7 +568,7 @@ class TaskRun(
                     }
                 // サービス カードは「開いていますが実行されていません」であり、自動的に再起動しています。しばらく待って修正して続行し、あきらめて通常どおりエラーを報告します。
                 val a11y = AccessibilityRepair.awaitService(ScreenAccessibility.instance, phoneServices.recovery.accessibilityRepair.phase, A11Y_WAIT_MS)
-                    ?: throw PhoneUnavailable(NO_ACCESSIBILITY)
+                    ?: throw PhoneUnavailable(StatusCopy.accessibilityUnavailable(phoneServices.recovery.accessibility.value.enabled))
                 recovery.beginRun(shell, key)
                 // 携帯電話を使用するタスクのみがシェルの生と死に従います。シェルはなくなり、仮想画面はその上のアプリとともに消えます。
                 shellDeath = IBinder.DeathRecipient {
@@ -625,7 +654,16 @@ class TaskRun(
                 val id = phone?.display?.current?.displayId ?: return false
                 return moveTask(taskId, id)
             }
-            val taskGate = TaskGate(states.locked, shellUp, phoneServices.recoverySettings.paymentPause) {
+            val taskGate = TaskGate(states.locked, shellUp, phoneServices.recoverySettings.paymentPause,
+                refreshLocked = states::refresh,
+                unattendedUnlock = if (provenance.origin == RunOrigin.Trigger) {
+                    {
+                        val result = (service.application as MikaApp).deviceAccess.access.unlock()
+                        states.refresh()
+                        Log.i(TAG, "scheduled unlock finished: ${result.status}")
+                    }
+                } else null,
+            ) {
                 val t = phone?.screen?.target?.value
                 t != null && t.taskId >= 0 && moveBackToAgent(t.taskId)
             }
@@ -815,8 +853,8 @@ class TaskRun(
                 confirmTimeoutMs = TaskService.CONFIRM_TIMEOUT_MS,
                 selfPackage = service.packageName,
                 flags = speed,
-                // は、lightSteps がオンで、軽量モデル調整ツールが有効になっている場合にのみ有効になります。
-                router = light?.let { ModelRouter(model, it) },
+                // 只在 lightSteps 打开、轻量模型能调工具且与主模型不是同一份配置时生效
+                router = routedLight?.let { ModelRouter(model, it) },
                 intentJudge = if (provenance.origin == RunOrigin.Ui) light ?: model else null,
                 // ルート選択は補助的な判断です。メインモデルではなく軽量モデルを使用してください。
                 routes = if (speed.replay) RouteMatcher(light ?: model, routeStore, knowledge) else null,
@@ -855,6 +893,11 @@ class TaskRun(
                     } else {
                         p.audio.opened(packageName, user)
                     }
+                }
+                override fun unmute(packageName: String) {
+                    val p = phone ?: return
+                    val user = p.screen.target.value?.takeIf { it.packageName == packageName }?.let { copyUser(it.userId) }
+                    if (!p.audio.unmute(packageName, user)) Log.w(TAG, "could not restore sound of $packageName from pip takeover")
                 }
                 override fun watchInput(packageName: String) {
                     counting?.cancel()
@@ -970,7 +1013,8 @@ class TaskRun(
                     resources.close()
                 }
             }
-            // 画面が解放された後、外部レポートが終了する前に画面がクリアされます。インターフェイスでは、タスクの終了時に画面が存在しないことが認識されます。
+            phone = null
+            // 屏释放后、对外报结束前清掉:界面看到任务结束时已经没有屏了
             _displayId.value = -1
             _appShown.value = false
             if (connection != null) phoneServices.sharedShell.release()
@@ -1245,7 +1289,6 @@ class TaskRun(
         const val A11Y_WAIT_MS = 5_000L
         val NO_PHONE_HELPER: String get() = tr(R.string.task_no_phone_helper)
         val NO_PHONE_HELPER_USB: String get() = tr(R.string.task_no_phone_helper_usb)
-        val NO_ACCESSIBILITY: String get() = tr(R.string.task_no_a11y)
         const val TAG = "MikaTask"
     }
 }

@@ -78,4 +78,5 @@ class ProviderPresetsTest {
         assertEquals(ProviderConfig.Kind.OpenAiCompat, coding.kind)
         assertNotEquals(standard.baseUrl, coding.baseUrl)
     }
+
 }
