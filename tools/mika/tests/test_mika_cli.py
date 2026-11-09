@@ -321,6 +321,14 @@ else:
             result, body = self.invoke("doctor", server=server)
             self.assertIn("[redacted]", body["error"]["message"])
 
+    def test_truncated_surrogate_still_returns_redacted_json(self):
+        goal = "端末で切れた\ud800"
+        payload = json.dumps({**SNAPSHOT, "goal": goal + " " + TOKEN}).encode("utf-8")
+        with api(lambda method, path, body: (200, payload, {}) if path.endswith("/t1") else None) as server:
+            result, body = self.invoke("task", "status", "t1", server=server)
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual(goal + " [redacted]", body["goal"])
+
     def test_adb_connect_owns_only_its_temporary_forward(self):
         with api() as server:
             adb, env, _, calls = self.fake_adb(server)
