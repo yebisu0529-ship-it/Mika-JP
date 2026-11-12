@@ -404,6 +404,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
         capsule.stopNow()
         phone.shellManager.stop()
         phone.recovery.stop()
+        paymentNotifications.stop()
         restoreWishSync.stop()
     }
 }

@@ -81,8 +81,9 @@ internal object MikaQuit {
 
     private suspend fun stopHelper(app: MikaApp) {
         val hub = app.phone.hub
-        val shell = hub.shell.value ?: return
         withContext(Dispatchers.IO) {
+            // 停止保存より前に始まった引き継ぎも、接続が確定してから終了する。
+            val shell = synchronized(hub) { hub.shell.value } ?: return@withContext
             runCatching { shell.setRestoreWish(RestoreWish.NONE.flags) }
                 .onFailure { Log.w(TAG, "Could not clear helper recovery request", it) }
             // destroyはヘルパー自身を終了するので、Binder切断も終了の結果になる。

@@ -131,9 +131,9 @@ class BuiltinShellManager(context: Context, private val hub: HelperHub, private 
         engine.retry()
     }
 
-    @Synchronized
     fun stop() = scope.cancel()
 
+    @Synchronized
     fun start() {
         if (started || Build.VERSION.SDK_INT < MIN_SDK) return
         started = true

@@ -1352,7 +1352,6 @@ class CapsuleController(
         const val SNAP_MS = 220L
 
         const val ROTATE_SETTLE_MS = 300L
-        /** 話すとき、2つの着地点がある程度拡張されています。 */
         /** カプセル上のメッセージの点滅が止まるまでにどれくらい時間がかかりますか: 送信済み、はっきりと聞こえない、エラーまたは利用不可。 */
         const val NOTE_SENT_MS = 1_500L
         const val NOTE_SHORT_MS = 2_000L

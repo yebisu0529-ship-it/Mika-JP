@@ -15,6 +15,8 @@ import com.wangzan101.mika.task.TaskService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -23,6 +25,8 @@ class PaymentPauseNotifications(private val app: MikaApp) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val control get() = app.paymentPause
     private val manager get() = app.getSystemService(NotificationManager::class.java)
+
+    suspend fun stop() = scope.coroutineContext.job.cancelAndJoin()
 
     fun start() {
         manager.createNotificationChannel(NotificationChannel(CHANNEL, tr(R.string.payment_channel), NotificationManager.IMPORTANCE_LOW))
