@@ -30,8 +30,6 @@ class LocalHostsTest {
         assertFalse(LocalHosts.unencryptedRemote("http://nas.local:11434"))
         assertFalse("not a URL", LocalHosts.unencryptedRemote("example.com"))
     }
-}
-
 
     @Test fun ipv4MappedAndExpandedLoopbackAreLocal() {
         listOf(
@@ -44,3 +42,4 @@ class LocalHostsTest {
         assertFalse(LocalHosts.unencryptedRemote("http://[0:0:0:0:0:0:0:1]:8080/v1"))
         assertTrue(LocalHosts.unencryptedRemote("http://[::ffff:8.8.8.8]:8080/v1"))
     }
+}

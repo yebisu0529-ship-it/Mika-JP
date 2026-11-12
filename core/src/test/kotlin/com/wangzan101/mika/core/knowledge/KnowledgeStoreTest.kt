@@ -155,8 +155,6 @@ class KnowledgeStoreTest {
         // 内蔵マニュアルとスキルインデックスを統合した後、マニュアル内のリンクは失われません（リンクのないリストは空になります）
         bundled.forEach { e -> e.links.forEach { assertNull(com.wangzan101.mika.core.tool.LinkPolicy.check(null, it.uri, it.packageName)) } }
     }
-}
-
 
     @Test fun domainMatchesRespectWordBoundaries() {
         val x = KnowledgeStore(listOf(entry("x", domains = listOf("x.com"))))
@@ -166,3 +164,4 @@ class KnowledgeStoreTest {
         assertTrue(zhihu.matchTask("看看 nzhihu.com").none { it.name == "zhihu" })
         assertTrue(zhihu.matchTask("打开 https://www.zhihu.com/question/1").any { it.name == "zhihu" })
     }
+}
