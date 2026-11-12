@@ -115,7 +115,7 @@ class McpRuntime(
      * 次回、Mika インターフェースが開かれるまで待ちます。
      */
     fun ensureRunning() {
-        if (!active) return
+        if (!active || com.wangzan101.mika.quit.MikaQuit.blocksWork(context)) return
         runCatching { context.startForegroundService(Intent(context, McpService::class.java)) }
             .onFailure { e ->
                 Log.w(TAG, "could not start computer access service", e)

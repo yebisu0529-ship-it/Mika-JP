@@ -51,6 +51,7 @@ import com.wangzan101.mika.ui.TaskActions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.combine
@@ -254,6 +255,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
             },
             disableAccessibility = { phone.recovery.setAccessibilityForPayment(false) },
             enableAccessibility = { phone.recovery.setAccessibilityForPayment(true) },
+            resumeAllowed = { !com.wangzan101.mika.quit.MikaQuit.blocksWork(this) },
         )
     }
     val paymentNotifications by lazy { com.wangzan101.mika.payment.PaymentPauseNotifications(this) }
@@ -339,6 +341,14 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
         AppLanguage.applyDefaultLocale(this)
     }
 
+    private var runtimeStarted = false
+    private val restoreWishSync by lazy {
+        com.wangzan101.mika.cap.phone.setup.RestoreWishSync(
+            phone.hub, FeatureFlags.get(this).capsuleModeChanges(), taskState.busy,
+            phone.recoverySettings.consent, phone.recovery.accessibility,
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         // インターフェース以外のテキスト（通知、サービス、フローティングカプセル）はアプリ言語に従って取得されます。
@@ -346,6 +356,12 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
         AppLanguage.applyDefaultLocale(this)
         UiText.source = ResourceTexts { AppLanguage.resources(this) }
         registerActivityLifecycleCallbacks(foreground)
+        startRuntime()
+    }
+
+    internal fun startRuntime() {
+        if (runtimeStarted || com.wangzan101.mika.quit.MikaQuit.requested(this)) return
+        runtimeStarted = true
         // 設定 › ネットワーク プロキシ: 最初のリクエストからミカ自身の接続が渡されます。 SOCKS プロキシのアカウント パスワードは、プロセス全体の認証者によって与えられます。
         com.wangzan101.mika.settings.NetProxyStore.get(this)
         com.wangzan101.mika.core.net.NetProxy.shared.installSocksAuth()
@@ -357,9 +373,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
         // は、接続が利用可能になるとすぐにデフォルトで有効になるいくつかの機能を追加します。
         phone.recovery.start()
         // 内蔵アシスタントに指示: 殺された後にミカを引き上げるかどうか (これはカプセルが常に表示されている場合、またはタスクが実行されている場合にのみ必要です)
-        com.wangzan101.mika.cap.phone.setup.RestoreWishSync(
-            phone.hub, FeatureFlags.get(this).capsuleModeChanges(), taskState.busy, phone.recoverySettings.consent, phone.recovery.accessibility,
-        ).start()
+        restoreWishSync.start()
         paymentNotifications.start()
         // 前回の異常終了（アプリがミュート）時に残された変更がここに復元されます。
         scope.launch { taskRecovery.recover() }
@@ -383,5 +397,13 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
             val state = SandboxState.get(this@MikaApp)
             runCatching { SkillsSync.sync(SandboxDirs(this@MikaApp)) { state.status.value is SandboxStatus.Ready } }
         }
+    }
+
+    internal suspend fun stopRuntimeForQuit() {
+        scope.cancel()
+        capsule.stopNow()
+        phone.shellManager.stop()
+        phone.recovery.stop()
+        restoreWishSync.stop()
     }
 }

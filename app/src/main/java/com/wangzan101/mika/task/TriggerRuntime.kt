@@ -77,7 +77,11 @@ object TriggerRuntime {
         engine(context, store(context)).rezone(System.currentTimeMillis(), previous, ZoneId.of(current))
     }
 
-    @Synchronized fun fire(context: Context) { engine(context, store(context)).fire(System.currentTimeMillis()) }
+    @Synchronized fun fire(context: Context) {
+        if (!com.wangzan101.mika.quit.MikaQuit.blocksWork(context)) engine(context, store(context)).fire(System.currentTimeMillis())
+    }
+
+    @Synchronized fun suspendAlarms(context: Context) = arm(context, null)
 
     @Synchronized fun delivered(context: Context, key: String) {
         val store = store(context)
@@ -259,7 +263,7 @@ object TriggerRuntime {
         val intent = Intent(context, TriggerAlarmReceiver::class.java).setAction(ACTION)
         val pending = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         alarms.cancel(pending)
-        if (atMs != null) {
+        if (atMs != null && !com.wangzan101.mika.quit.MikaQuit.blocksWork(context)) {
             if (canScheduleExactly(context)) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pending)
             else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pending)
         }
@@ -281,6 +285,7 @@ object ExactAlarmGuide {
 
 class TriggerAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (com.wangzan101.mika.quit.MikaQuit.blocksWork(context)) return
         if (intent.action != "com.wangzan101.mika.task.TRIGGER_ALARM") return
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {

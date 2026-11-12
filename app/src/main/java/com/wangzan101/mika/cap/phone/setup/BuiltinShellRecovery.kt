@@ -34,6 +34,7 @@ import com.wangzan101.mika.settings.RecoverySettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -151,6 +152,8 @@ class BuiltinShellRecovery(
      * 同時に、アクセシビリティ サービスにも注目してください。サービスが実行されておらず、システム設定を書き込む方法がある場合 (アプリ自体に承認があるか、アシスタントが実行されている場合)、自動的にオンになります。
      */
     @Synchronized
+    fun stop() = scope.cancel()
+
     fun start() {
         if (started) return
         started = true

@@ -39,6 +39,7 @@ import com.wangzan101.mika.cap.phone.shell.adb.NsdAdbServiceFinder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -131,6 +132,8 @@ class BuiltinShellManager(context: Context, private val hub: HelperHub, private 
     }
 
     @Synchronized
+    fun stop() = scope.cancel()
+
     fun start() {
         if (started || Build.VERSION.SDK_INT < MIN_SDK) return
         started = true

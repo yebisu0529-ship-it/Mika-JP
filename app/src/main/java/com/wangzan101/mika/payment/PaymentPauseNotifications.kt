@@ -68,6 +68,7 @@ class PaymentPauseNotifications(private val app: MikaApp) {
     }
 
     private fun show(status: PaymentPauseStatus) {
+        if (com.wangzan101.mika.quit.MikaQuit.requested(app)) return
         val b = Notification.Builder(app, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(tr(if (status == PaymentPauseStatus.Active) R.string.app_name else R.string.payment_title))

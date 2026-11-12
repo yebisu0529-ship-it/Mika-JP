@@ -120,4 +120,12 @@ class BundledKnowledgeTest {
         val hit = KnowledgeStore(bundled).matchTask("帮我发微信", 10)
         assertTrue(hit.all { e -> catalog.items.any { it.kind in setOf("app", "site") && it.name == e.name } })
     }
+
+
+    @Test fun singleAsciiLetterDoesNotMatchEveryName() {
+        assertTrue(catalog.find("a").isEmpty())
+        assertTrue(catalog.find("z").isEmpty())
+        assertTrue(catalog.find("微信", kind = "app").any { it.name == "wechat" })
+        assertTrue(catalog.find("微").any { it.name == "wechat" })
+    }
 }

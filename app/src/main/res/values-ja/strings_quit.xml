@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quit_action">完全停止</string>
+    <string name="quit_title">Mikaを完全停止しますか？</string>
+    <string name="quit_body">ユーザー補助とヘルパーを停止し、実行中のタスクを中断します。支払いが終わったら、ホーム画面からMika JPを開き、通知か設定の「復旧と修復」で「Mikaを再開」を押してください。</string>
+    <string name="quit_usb">USBだけで接続している場合は、Mika JPを開いたあと、パソコンからヘルパーの開始コマンドをもう一度実行してください。</string>
+    <string name="quit_accessibility_failed">Mikaのユーザー補助を停止できませんでした。Androidの「ユーザー補助」でMikaをオフにしてください。</string>
+    <string name="quit_save_failed">Mikaの状態を保存できませんでした。もう一度お試しください。</string>
+    <string name="quit_helper_failed">ユーザー補助は停止しました。ヘルパーの終了を確認できませんでした。</string>
+</resources>

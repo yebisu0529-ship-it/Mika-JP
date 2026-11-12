@@ -152,6 +152,7 @@ open class HandoffProvider : ContentProvider() {
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         if (method != HelperHandoff.METHOD_ATTACH) return null
         val ctx = context ?: return null
+        if (com.wangzan101.mika.quit.MikaQuit.requested(ctx)) return Bundle()
         return PhoneServices.of(ctx).hub.offer(extras, Binder.getCallingUid(), Binder.getCallingPid())
     }
 
