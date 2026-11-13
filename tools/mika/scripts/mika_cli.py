@@ -501,7 +501,14 @@ def main(argv=None):
     except KeyboardInterrupt:
         result = {"error": {"code": "interrupted", "message": "Stopped waiting locally; no task cancellation was requested."}}
         code = 130
-    output = json.dumps(redact(result, secrets), ensure_ascii=False, separators=(",", ":") if compact else None, indent=None if compact else 2)
+    redacted = redact(result, secrets)
+    style = {"separators": (",", ":") if compact else None, "indent": None if compact else 2}
+    output = json.dumps(redacted, ensure_ascii=False, **style)
+    try:
+        output.encode("utf-8")
+    except UnicodeEncodeError:
+        # 端末がサロゲートペアの途中で文字列を切った場合も、JSONを1件返す。
+        output = json.dumps(redacted, ensure_ascii=True, **style)
     print(output, file=sys.stdout if compact or code == 0 else sys.stderr)
     return code
 
