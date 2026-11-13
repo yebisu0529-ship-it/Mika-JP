@@ -52,7 +52,6 @@ import com.wangzan101.mika.task.TaskService.Companion.isActive
 import com.wangzan101.mika.takeover.TakeoverQueue
 import com.wangzan101.mika.ui.ChatCopy
 import com.wangzan101.mika.ui.VoiceCopy
-import com.wangzan101.mika.i18n.tr
 import com.wangzan101.mika.voice.HoldToTalk
 import com.wangzan101.mika.voice.SpeechChoice
 import com.wangzan101.mika.voice.SpeechFailure
@@ -71,6 +70,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -403,6 +403,11 @@ class CapsuleController(
         if (follow == id) follow = null
         if (idle?.conversationId == id) idle = if (expanded) CardView.Chat(null) else null
         refresh()
+    }
+
+    internal fun stopNow() {
+        scope.cancel()
+        hide()
     }
 
     private fun hide() {
@@ -857,14 +862,14 @@ class CapsuleController(
 
     /**
      * どこにドラッグできますか: カプセルとカプセル全体をドラッグできます。カードのドラッグはタイトルバーを押すことでのみ可能（中央の上下スワイプはスクロール）で、画面を拡大するとドラッグできません。
-     * カプセルを長押しして話すこともできます (これは機能しません。音声入力が使用されないように設定されている場合も機能しません。長押しは常にクリックを意味します)。
+     * カプセルの長押しでは、指を離したときに完全停止の確認を開く。
      */
     private fun applyDrag() {
         window?.draggable(drag)
         val talkable = canTalk()
         // もう何も言えません（たとえば、アプリがあなたに渡され、カプセルがどのカプセルに変更された場合）：このセクションは破棄され、送信されません - ユーザーは選択したドロップポイントを解放する機会がありません。
         if (!talkable && talk.active) talk.abort()
-        window?.holdable(talkHold.takeIf { talkable }, CapsuleTalk.HOLD_MS)
+        window?.holdable(stopHold.takeUnless { expanded || capturing }, ViewConfiguration.getLongPressTimeout().toLong())
         cardWindow?.draggable(cardDrag, cardHandle.takeIf { !zoomed } ?: Rect())
     }
 
@@ -982,23 +987,14 @@ class CapsuleController(
     private fun canTalk(): Boolean = panelWindow != null && !isBar() &&
         (context.applicationContext as MikaApp).speech.choice.value != SpeechChoice.Off
 
-    /** そのウィンドウを長押しします。話し始め、指を動かして着地点を計算し、指を放して着地点を押して終了します。 */
-    private val talkHold = object : OverlayHold {
-        override fun start(rawX: Float, rawY: Float) = beginTalk(byTouch = true)
-
-        override fun move(rawX: Float, rawY: Float) {
-            if (talk.byTouch) talk.move(rawX, rawY, dp(TARGET_SLOP_DP))
-        }
-
-        override fun end(rawX: Float, rawY: Float) {
-            if (!talk.byTouch) return
-            talk.finish(CapsuleVoice.drop(rawX, rawY, talk.cancelAt, talk.editAt, dp(TARGET_SLOP_DP)))
-        }
-
-        override fun cancel() {
-            if (talk.byTouch) talk.abort()
-        }
+    private val stopHold = object : OverlayHold {
+        override fun start(rawX: Float, rawY: Float) = resetTaps()
+        override fun move(rawX: Float, rawY: Float) = Unit
+        override fun end(rawX: Float, rawY: Float) = openCompleteStop()
+        override fun cancel() = Unit
     }
+
+    private fun openCompleteStop() = com.wangzan101.mika.quit.CompleteStopActivity.open(context)
 
     /** 画面読み上げの「話す」: 話していないときに開始し (指がなく、話すことしかできません)、話しているときに話します。 */
     private fun toggleTalk() {
@@ -1307,6 +1303,7 @@ class CapsuleController(
                     holding = talking && talk.byTouch,
                     onTalk = if (canTalk()) ::toggleTalk else null,
                     talkLabel = tr(if (talking && !talk.byTouch) R.string.capsule_voice_send else R.string.capsule_voice_talk),
+                    onCompleteStop = ::openCompleteStop,
                 )
             }
         }
@@ -1355,8 +1352,6 @@ class CapsuleController(
         const val SNAP_MS = 220L
 
         const val ROTATE_SETTLE_MS = 300L
-        /** 話すとき、2つの着地点がある程度拡張されています。 */
-        const val TARGET_SLOP_DP = 14
         /** カプセル上のメッセージの点滅が止まるまでにどれくらい時間がかかりますか: 送信済み、はっきりと聞こえない、エラーまたは利用不可。 */
         const val NOTE_SENT_MS = 1_500L
         const val NOTE_SHORT_MS = 2_000L

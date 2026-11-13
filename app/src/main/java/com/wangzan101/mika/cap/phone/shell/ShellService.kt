@@ -1470,8 +1470,11 @@ class ShellService(
     }
 
     override fun destroy() {
-        releaseAll()
-        exitProcess(0)
+        try {
+            releaseAll()
+        } finally {
+            exitProcess(0)
+        }
     }
 
     /**

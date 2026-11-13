@@ -34,6 +34,7 @@ import com.wangzan101.mika.settings.RecoverySettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -144,6 +145,8 @@ class BuiltinShellRecovery(
         if (confirmed) settings.save(settings.consent.value.withApplied(RecoveryCapability.Accessibility, on))
         confirmed
     }
+
+    fun stop() = scope.cancel()
 
     /**
      * アシスタントが実行されるたびに (ペアリング直後、切断後の再起動、アプリの起動時にすでにペアリングされており、起動後に接続が自動的に復元されます)、デフォルトでオンになります。

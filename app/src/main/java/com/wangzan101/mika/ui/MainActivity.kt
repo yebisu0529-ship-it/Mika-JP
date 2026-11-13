@@ -81,6 +81,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (!com.wangzan101.mika.quit.MikaQuit.reopen(application as MikaApp, intent)) {
+            finishAndRemoveTask()
+            return
+        }
         requestedConversation = intent.getStringExtra(EXTRA_OPEN_CONVERSATION)
         monitor = SystemStatusMonitor(this, PhoneServices.of(this).shellControl)
         val store = ProviderStore.get(this)
@@ -105,6 +109,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!::monitor.isInitialized || com.wangzan101.mika.quit.MikaQuit.blocksWork(this)) return
         monitor.start()
         // は、新しいバージョンを開くたびに静かにチェックし (2 分以内に開いた場合は 1 回のみ)、失敗した場合は音を立てません。
         (application as MikaApp).updates.autoCheckInBackground()
@@ -114,12 +119,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!::monitor.isInitialized || com.wangzan101.mika.quit.MikaQuit.blocksWork(this)) return
         monitor.refresh()
         (application as MikaApp).paymentNotifications.refresh()
     }
 
     override fun onStop() {
-        monitor.stop()
+        if (::monitor.isInitialized) monitor.stop()
         super.onStop()
     }
 

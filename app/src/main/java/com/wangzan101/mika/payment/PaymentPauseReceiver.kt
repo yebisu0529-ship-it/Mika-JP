@@ -9,6 +9,7 @@ import com.wangzan101.mika.MikaApp
 /** 通知の明示的な操作だけを受け付ける非公開の受信先。 */
 class PaymentPauseReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (com.wangzan101.mika.quit.MikaQuit.blocksWork(context)) return
         val action = intent.action ?: return
         if (action != PaymentPauseNotifications.ACTION_PAUSE && action != PaymentPauseNotifications.ACTION_RESUME) return
         if (action == PaymentPauseNotifications.ACTION_RESUME &&

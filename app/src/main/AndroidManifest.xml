@@ -100,6 +100,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".quit.CompleteStopActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar" />
+
         <!-- 通知内の引き継ぎボタンの配置ポイント: 通知からアクティビティが開始された場合にのみ通知バーが閉じられ、ユーザーはホーム画面に移動したアプリを直接確認できます。 -->
         <activity
             android:name=".takeover.TakeoverActivity"

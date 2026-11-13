@@ -184,7 +184,7 @@
     <string name="speech_system_silent_note">前回、このスマホで応答しませんでした。もう一度選ぶと再試行します</string>
     <string name="speech_tag_silent">応答なし</string>
     <string name="speech_tag_speech">音声</string>
-    <string name="speech_off_note">テキストボックスとカプセルでは、長押しして話せません</string>
+    <string name="speech_off_note">入力欄の音声入力をオフにする</string>
     <string name="speech_footer">音声モデルらしいものだけを表示しています。お使いのモデルが見当たらない場合は、名前を入力してください。選ぶと、短い音声をテストとして文字に変換します。</string>
     <string name="speech_pick_failed">そのモデルでは文字に変換できませんでした: %1$s</string>
     <string name="speech_pick_timeout">%1$s はテスト用の音声に %2$d 秒以内に応答しませんでした</string>
