@@ -3,6 +3,8 @@ package com.wangzan101.mika.core.record
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * が要約 ([RunMetrics]) を実行するたびに、行ごとに 1 つのコピーが [file] (JSON 行) に存在し、最新の [keep] コピーのみが保持されます。最後の 30 回の実行のみが記録されます。
@@ -56,8 +58,12 @@ class RunMetricsStore(private val file: File, private val keep: Int = DEFAULT_KE
         runCatching {
             file.parentFile?.mkdirs()
             val tmp = File(file.path + ".tmp")
-            tmp.writeText(list.takeLast(keep).joinToString("") { JSON.encodeToString(RunMetrics.serializer(), it) + "\n" })
-            if (!tmp.renameTo(file)) error("rename failed")
+            try {
+                tmp.writeText(list.takeLast(keep).joinToString("") { JSON.encodeToString(RunMetrics.serializer(), it) + "\n" })
+                Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } finally {
+                tmp.delete()
+            }
         }
     }
 
