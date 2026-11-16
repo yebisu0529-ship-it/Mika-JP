@@ -79,6 +79,18 @@ class HttpServerTest {
         assertTrue(reply, reply.endsWith("/second"))
     }
 
+    @Test fun headResponsePreservesHeadersAndLeavesSocketReadyForGet() {
+        val reply = exchange(
+            "HEAD /first HTTP/1.1\r\nHost: localhost\r\n\r\n" +
+                "GET /second HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        val (head, get) = reply.split("\r\n\r\n", limit = 2)
+        assertTrue(head, head.startsWith("HTTP/1.1 200 "))
+        assertTrue(head, head.lines().contains("Content-Length: 6"))
+        assertTrue(get, get.startsWith("HTTP/1.1 200 "))
+        assertEquals("/second", get.substringAfter("\r\n\r\n"))
+    }
+
     private fun exchange(request: String): String {
         val server = MiniHttpServer(InetSocketAddress(loopback, 0), handler = { req ->
             HttpResponse(200, req.path.toByteArray(Charsets.UTF_8))
