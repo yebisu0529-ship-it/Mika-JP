@@ -124,6 +124,7 @@ class OverlayHost internal constructor(private val service: ScreenAccessibility)
         placement: OverlayPlacement,
         onOutside: (() -> Unit)? = null,
         touchable: Boolean = true,
+        applicationLayer: Boolean = false,
         content: @Composable () -> Unit,
     ): OverlayWindow? {
         val owners = OverlayOwners()
@@ -139,7 +140,7 @@ class OverlayHost internal constructor(private val service: ScreenAccessibility)
         }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            overlayWindowType(applicationLayer),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 (if (touchable && !injectedGestures.isolated) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE),
@@ -551,3 +552,8 @@ internal class OverlayOwners : SavedStateRegistryOwner, ViewModelStoreOwner {
         viewModelStore.clear()
     }
 }
+
+/** 通常のフローティングアプリと同じレイヤーを選び、ユーザー補助レイヤーで上に覆わない。 */
+internal fun overlayWindowType(applicationLayer: Boolean): Int =
+    if (applicationLayer) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+    else WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY

@@ -15,6 +15,7 @@ import com.wangzan101.mika.core.shell.HelperHandoff
 import com.wangzan101.mika.core.shell.HelperRestoreReport
 import com.wangzan101.mika.core.shell.NonceSlots
 import com.wangzan101.mika.core.shell.NonceStore
+import com.wangzan101.mika.quit.MikaQuit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,6 +74,7 @@ class HelperHub(context: Context) {
      */
     @Synchronized
     fun offer(extras: Bundle?, callingUid: Int, callingPid: Int): Bundle {
+        if (MikaQuit.requested(app)) return Bundle()
         val binder = extras?.getBinder(HelperHandoff.KEY_BINDER)
         HelperHandoff.check(
             callingUid, callingPid,

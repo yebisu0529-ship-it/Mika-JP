@@ -26,6 +26,7 @@ class PaymentPauseController(
     private val shouldRestoreAccessibility: () -> Boolean,
     private val disableAccessibility: suspend () -> Boolean,
     private val enableAccessibility: suspend () -> Boolean,
+    private val resumeAllowed: () -> Boolean = { true },
 ) {
     private val lock = Mutex()
     private val _status = MutableStateFlow(if (store.paymentPause.value == null) PaymentPauseStatus.Active else PaymentPauseStatus.Pausing)
@@ -52,6 +53,7 @@ class PaymentPauseController(
     }
 
     suspend fun resume() = lock.withLock {
+        if (!resumeAllowed()) return@withLock
         val record = store.paymentPause.value ?: return@withLock
         _status.value = PaymentPauseStatus.Resuming
         try {

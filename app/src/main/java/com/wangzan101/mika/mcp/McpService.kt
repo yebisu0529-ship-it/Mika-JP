@@ -30,7 +30,7 @@ class McpService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         TaskService.ensureChannels(this)
-        val applied = runCatching { McpModes.apply(intent?.action, runtime.settings, runtime.usb, runtime.relaySettings) }
+        val applied = !com.wangzan101.mika.quit.MikaQuit.blocksWork(this) && runCatching { McpModes.apply(intent?.action, runtime.settings, runtime.usb, runtime.relaySettings) }
             .onFailure { Log.w("MikaMcp", "could not update computer access settings", it) }.isSuccess
         // startForegroundService の後は、終了しようとしている場合でも、できるだけ早くフォアグラウンドに入る必要があります。プロセスがクラッシュするのを防ぐために、システムがフォアグラウンドに入ることができない場合に終了します。
         val foreground = runCatching {

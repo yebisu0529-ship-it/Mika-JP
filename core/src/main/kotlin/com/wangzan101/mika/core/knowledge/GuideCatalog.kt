@@ -92,7 +92,9 @@ class GuideCatalog private constructor(
         return tokens.map { t ->
             when {
                 names.any { it == t } -> 100
-                // 中国語のターゲットには通常スペースが含まれず、文全体が 1 つの単語になります。文中に出現する名前も部分一致とみなされます。
+                // 单个 ASCII 字符做子串会命中几乎所有英文名与描述,只有完全相等才算数
+                t.length == 1 && t[0].code < 128 -> 0
+                // 中文目标通常不带空格,整句是一个词:名字出现在句子里也算部分对上
                 names.any { it.contains(t) || (it.length >= 2 && t.contains(it)) } -> 60
                 terms.any { it == t } -> 50
                 terms.any { it.contains(t) } -> 40

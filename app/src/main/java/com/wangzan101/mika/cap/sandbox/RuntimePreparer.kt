@@ -24,9 +24,12 @@ object RuntimePreparer {
     /** 準備中です。 nullではありません。 */
     val current: Job? get() = job?.takeIf { it.isActive }
 
+    @Synchronized fun stop() { job?.cancel() }
+
     /** 準備が必要な場合は、この準備を開始して返します (すでに準備されている場合は、準備を返します)。 null を返す必要はありません。 */
     @Synchronized
     fun ensure(context: Context, retryFailed: Boolean = false): Job? {
+        if (com.wangzan101.mika.quit.MikaQuit.blocksWork(context)) return null
         current?.let { return it }
         val app = context.applicationContext
         val state = SandboxState.get(app)

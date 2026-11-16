@@ -136,5 +136,11 @@ internal object HttpSupport {
         })
     }
 
-    fun retryAfterMs(header: String?): Long? = header?.trim()?.toDoubleOrNull()?.let { (it * 1000).toLong() }
+    private val RETRY_AFTER_BODY = Regex("""(?:try again in|retry after|wait|retry in)\s+(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b""", RegexOption.IGNORE_CASE)
+
+    fun retryAfterMs(header: String?, body: String? = null): Long? {
+        fun milliseconds(text: String?): Long? = text?.trim()?.toDoubleOrNull()
+            ?.takeIf { it.isFinite() && it >= 0.0 }?.let { (it * 1000).toLong() }
+        return milliseconds(header) ?: milliseconds(body?.let { RETRY_AFTER_BODY.find(it)?.groupValues?.get(1) })
+    }
 }

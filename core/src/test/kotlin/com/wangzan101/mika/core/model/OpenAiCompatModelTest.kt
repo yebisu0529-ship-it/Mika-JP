@@ -158,6 +158,8 @@ class OpenAiCompatModelTest {
         assertTrue(errorFor(MockResponse().setResponseCode(403).setBody("""{"error":{"code":"insufficient_quota"}}""")) is ModelError.QuotaExceeded)
         val rl = errorFor(MockResponse().setResponseCode(429).setHeader("retry-after", "2")) as ModelError.RateLimited
         assertEquals(2000L, rl.retryAfterMs)
+        val rlBody = errorFor(MockResponse().setResponseCode(429).setBody("""{"error":{"message":"Rate limit reached. Please try again in 15s."}}""")) as ModelError.RateLimited
+        assertEquals(15000L, rlBody.retryAfterMs)
         assertTrue(errorFor(MockResponse().setResponseCode(429).setBody("""{"error":{"message":"Rate limit reached, limit: 60"}}""")) is ModelError.RateLimited)
         // このモデルには割り当てがありません (Gemini の OpenAI 互換エントリ配列)。モデルを変更するだけです。
         val zero = errorFor(MockResponse().setResponseCode(429).setBody("""[{"error":{"code":429,"message":"Quota exceeded for metric: free_tier_requests, limit: 0","status":"RESOURCE_EXHAUSTED"}}]"""))

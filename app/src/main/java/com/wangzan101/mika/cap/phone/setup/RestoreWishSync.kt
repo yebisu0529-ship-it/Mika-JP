@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.job
 
 /**
  * Leave 「殺されたミカを引き上げますか？」 ([RestoreWish]) 内蔵アシスタントへ: カプセル モード、実行中のタスクがあるかどうか、「アクセシビリティをオンにしてください」、
@@ -34,6 +36,8 @@ class RestoreWishSync(
     private val accessibility: Flow<A11yObservation>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    suspend fun stop() = scope.coroutineContext.job.cancelAndJoin()
     private val sender = RestoreWishSender<IMikaShell> { shell, wish ->
         runCatching { shell.setRestoreWish(wish.flags) }
             .onFailure { Log.w(TAG, "cannot hand the restore wish to the helper", it) }

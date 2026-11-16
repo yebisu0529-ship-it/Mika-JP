@@ -54,6 +54,34 @@ class PaymentPauseTest {
         assertEquals(PaymentPauseStatus.ResumeFailed, controller.status.value)
     }
 
+    @Test fun aQueuedResumeCannotUndoCompleteStop() = runTest {
+        val store = Store()
+        val allowDisableToFinish = CompletableDeferred<Unit>()
+        var resumeAllowed = true
+        var enables = 0
+        val controller = PaymentPauseController(store, { true }, {
+            allowDisableToFinish.await()
+            true
+        }, { enables++; true }, resumeAllowed = { resumeAllowed })
+
+        launch { controller.pause() }
+        runCurrent()
+        launch { controller.resume() }
+        runCurrent()
+        resumeAllowed = false
+        allowDisableToFinish.complete(Unit)
+        runCurrent()
+
+        assertEquals(0, enables)
+        assertEquals(PaymentPauseRecord(true), store.paymentPause.value)
+        assertEquals(PaymentPauseStatus.Paused, controller.status.value)
+
+        resumeAllowed = true
+        controller.resume()
+        assertEquals(1, enables)
+        assertNull(store.paymentPause.value)
+    }
+
     @Test fun resumingDoesNotEnableAServiceThatWasAlreadyTurnedOff() = runTest {
         val store = Store()
         var enables = 0

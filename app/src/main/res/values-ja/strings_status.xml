@@ -80,4 +80,5 @@
     <string name="runtime_preparing">準備中</string>
     <string name="banner_a11y_restricted_detail">Mikaのアプリ情報で「制限された設定を許可」を確認してください</string>
     <string name="explain_a11y_restricted_body">Androidは、アプリストア以外からインストールしたアプリのユーザー補助を制限する場合があります。Mikaのアプリ情報を開き、メニューに「制限された設定を許可」があれば選んでください。その後、ユーザー補助の設定でMikaを一度オフにしてから、もう一度オンにしてください。</string>
+    <string name="explain_a11y_restricted_off_body">Mikaのアプリ情報を開き、メニューに「制限された設定を許可」があれば選んでください。その後、システムの「ユーザー補助」でMikaをオンにしてください。</string>
 </resources>

@@ -132,6 +132,16 @@ class FeatureFlags(private val prefs: SharedPreferences) {
         prefs.edit().putFloat(CAPSULE_CARD_HEIGHT, fraction.coerceIn(0f, 1f)).apply()
     }
 
+    fun quitRequested(): Boolean = prefs.getBoolean(QUIT_REQUESTED, false)
+
+    /** プロセスを終了する前に保存を確認する。 */
+    fun setQuitRequested(value: Boolean): Boolean {
+        val previous = quitRequested()
+        if (prefs.edit().putBoolean(QUIT_REQUESTED, value).commit()) return true
+        prefs.edit().putBoolean(QUIT_REQUESTED, previous).apply()
+        return false
+    }
+
     companion object {
         const val PREFS = "feature_flags"
         /** 各タスクステップの上限として設定できる最大値。 0/null は制限がないことを意味します。 */
@@ -156,6 +166,7 @@ class FeatureFlags(private val prefs: SharedPreferences) {
         private const val CAPSULE_SIDE = "capsule_side"
         private const val CAPSULE_HEIGHT = "capsule_height"
         private const val CAPSULE_CARD_HEIGHT = "capsule_card_height"
+        private const val QUIT_REQUESTED = "quit_requested"
 
         fun get(context: Context) = FeatureFlags(context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE))
     }

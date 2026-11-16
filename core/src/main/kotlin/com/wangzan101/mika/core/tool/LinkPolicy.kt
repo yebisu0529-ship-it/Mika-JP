@@ -17,7 +17,7 @@ object LinkPolicy {
         "android.settings.INTERNAL_STORAGE_SETTINGS", "android.settings.ACCESSIBILITY_SETTINGS",
     )
 
-    private val BLOCKED_SCHEMES = setOf("intent", "file", "content", "javascript")
+    private val BLOCKED_SCHEMES = setOf("intent", "file", "content", "javascript", "data", "about", "blob")
     private val SCHEME = Regex("^([A-Za-z][A-Za-z0-9+.-]*):")
     /** Android パッケージ名の形式。これは、パッケージ/アプリのパラメーターをチェックするディスパッチャーによっても使用されます。 */
     val PACKAGE = Regex("^[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+$")

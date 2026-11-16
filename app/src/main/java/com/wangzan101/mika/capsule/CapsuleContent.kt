@@ -136,6 +136,7 @@ fun CapsuleContent(
     holding: Boolean = false,
     onTalk: (() -> Unit)? = null,
     talkLabel: String = "",
+    onCompleteStop: (() -> Unit)? = null,
 ) {
     // フェードと復元には時間をかけてください。アニメーションをオフにする場合は直接変更してください
     val shown = if (MikaTheme.reduceMotion) alpha else animateFloatAsState(alpha, tween(FADE_MS), label = "fade").value
@@ -144,6 +145,7 @@ fun CapsuleContent(
             onSwapSide?.let { f -> CustomAccessibilityAction(CapsuleCopy.SWAP_SIDE) { f(); true } },
             onSendScreen?.let { f -> CustomAccessibilityAction(ScreenCopy.SEND_SCREEN) { f(); true } },
             onTalk?.let { f -> CustomAccessibilityAction(talkLabel) { f(); true } },
+            onCompleteStop?.let { f -> CustomAccessibilityAction(tr(R.string.quit_action)) { f(); true } },
         )
     }
     Box(modifier.padding(CapsuleShadowRoom)) {

@@ -32,6 +32,10 @@ open class ScreenAccessibility : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        if (com.wangzan101.mika.quit.MikaQuit.requested(this)) {
+            disableSelf()
+            return
+        }
         // 多くのアプリは、結果を表示するテキスト コントロールを「アクセシビリティにとって重要ではない」としてマークします。読まないと結果はわかりません。設定ファイルに次のように記述されています
         // システムが古いサービス構成を使用しないように、実行時に再度入力します。
         serviceInfo?.let { info ->

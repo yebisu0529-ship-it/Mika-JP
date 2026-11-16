@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- カプセルを通常のフローティングレイヤーに置く任意の互換性設定。ユーザーが設定で許可する。 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 長押しすると、話しながら録音し、テキストに変換します。 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- ユーザーは、バージョン情報ページで新しいバージョンをダウンロードした後、それをシステム インストーラーに送信して、オーバーレイのインストールを確認します。 -->
@@ -99,6 +101,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".quit.CompleteStopActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar" />
 
         <!-- 通知内の引き継ぎボタンの配置ポイント: 通知からアクティビティが開始された場合にのみ通知バーが閉じられ、ユーザーはホーム画面に移動したアプリを直接確認できます。 -->
         <activity
