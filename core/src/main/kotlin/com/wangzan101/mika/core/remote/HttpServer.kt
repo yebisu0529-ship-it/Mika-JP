@@ -112,7 +112,7 @@ class MiniHttpServer(
                 val response = try { handler(request) } catch (e: Exception) { onError(e); HttpResponse.empty(500) }
                 val close = request.header("connection")?.split(',')
                     ?.any { it.trim().equals("close", ignoreCase = true) } == true
-                write(output, response, close)
+                write(output, response, close, headOnly = request.method == "HEAD")
                 if (close) return
             }
         } catch (_: SocketException) {
@@ -229,7 +229,7 @@ class MiniHttpServer(
             500 to "Internal Server Error", 503 to "Service Unavailable",
         )
 
-        fun write(output: OutputStream, r: HttpResponse, close: Boolean) {
+        fun write(output: OutputStream, r: HttpResponse, close: Boolean, headOnly: Boolean = false) {
             val head = StringBuilder("HTTP/1.1 ${r.status} ${REASONS[r.status] ?: "Status"}\r\n")
             r.headers.forEach { (k, v) -> head.append(k).append(": ").append(v).append("\r\n") }
             head.append("Content-Length: ").append(r.body.size).append("\r\n")
@@ -237,7 +237,7 @@ class MiniHttpServer(
             if (close) head.append("Connection: close\r\n")
             head.append("\r\n")
             output.write(head.toString().toByteArray(Charsets.ISO_8859_1))
-            output.write(r.body)
+            if (!headOnly) output.write(r.body)
             output.flush()
         }
     }
